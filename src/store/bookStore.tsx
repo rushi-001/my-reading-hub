@@ -5,14 +5,23 @@ import React, {
     useState,
     useCallback,
 } from "react";
-import type { Book, Note, AppView } from "@/types/book";
+import type { Book, Note, AppView, AppSettings, Bookmark } from "@/types/book";
 
 const BOOKS_KEY = "secondbrain_books";
 const NOTES_KEY = "secondbrain_notes";
+const SETTINGS_KEY = "secondbrain_settings";
 
 function loadBooks(): Book[] {
     try {
-        return JSON.parse(localStorage.getItem(BOOKS_KEY) || "[]");
+        const parsed = JSON.parse(localStorage.getItem(BOOKS_KEY) || "[]");
+        // migrate: ensure new fields exist
+        return parsed.map((b: Book) => ({
+            groupId: null,
+            isFavorite: false,
+            readingDates: [],
+            bookmarks: [],
+            ...b,
+        }));
     } catch {
         return [];
     }
@@ -26,7 +35,25 @@ function loadNotes(): Note[] {
     }
 }
 
-// ── Demo seed books (no real files — placeholders) ──
+function loadSettings(): AppSettings {
+    const defaults: AppSettings = {
+        showIcons: true,
+        commandPalettePosition: "top",
+        stackGroups: false,
+        stackMaxVisible: 3,
+        autoScrollSpeed: 0,
+        sidebarVisible: true,
+    };
+    try {
+        return { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") };
+    } catch {
+        return defaults;
+    }
+}
+
+const todayISO = () => new Date().toISOString().split("T")[0];
+
+// ── Demo seed books ──
 const SEED_BOOKS: Book[] = [
     {
         id: "seed-1",
@@ -43,9 +70,13 @@ const SEED_BOOKS: Book[] = [
         currentPage: 0,
         totalPages: 0,
         tags: ["productivity", "focus"],
+        groupId: null,
+        isFavorite: true,
+        readingDates: [todayISO()],
+        bookmarks: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        lastOpenedAt: null,
+        lastOpenedAt: new Date().toISOString(),
     },
     {
         id: "seed-2",
@@ -62,6 +93,10 @@ const SEED_BOOKS: Book[] = [
         currentPage: 87,
         totalPages: 352,
         tags: ["programming", "craft"],
+        groupId: null,
+        isFavorite: false,
+        readingDates: [todayISO()],
+        bookmarks: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         lastOpenedAt: null,
@@ -76,8 +111,10 @@ interface BookStore {
     currentView: AppView;
     showNotes: boolean;
     isCommandOpen: boolean;
+    isSettingsOpen: boolean;
     audioUrl: string | null;
     isPlaying: boolean;
+    settings: AppSettings;
     // Actions
     addBook: (book: Omit<Book, "id" | "createdAt" | "updatedAt">) => Book;
     updateBook: (id: string, patch: Partial<Book>) => void;
@@ -85,6 +122,9 @@ interface BookStore {
     openBook: (id: string) => void;
     closeBook: () => void;
     saveProgress: (id: string, progress: number, currentPage?: number) => void;
+    toggleFavorite: (id: string) => void;
+    addBookmark: (bookId: string, bm: Omit<Bookmark, "id" | "createdAt">) => void;
+    removeBookmark: (bookId: string, bmId: string) => void;
     addNote: (bookId: string, title: string) => Note;
     updateNote: (id: string, patch: Partial<Note>) => void;
     deleteNote: (id: string) => void;
@@ -92,9 +132,12 @@ interface BookStore {
     setView: (v: AppView) => void;
     setShowNotes: (v: boolean) => void;
     setCommandOpen: (v: boolean) => void;
+    setSettingsOpen: (v: boolean) => void;
     setAudioUrl: (url: string | null) => void;
     setPlaying: (v: boolean) => void;
+    updateSettings: (patch: Partial<AppSettings>) => void;
     notesForBook: (bookId: string) => Note[];
+    getLastReadBook: () => Book | null;
 }
 
 const BookContext = createContext<BookStore | null>(null);
@@ -110,16 +153,15 @@ export function BookProvider({ children }: { children: React.ReactNode }) {
     const [currentView, setCurrentView] = useState<AppView>("library");
     const [showNotes, setShowNotes] = useState(false);
     const [isCommandOpen, setCommandOpen] = useState(false);
+    const [isSettingsOpen, setSettingsOpen] = useState(false);
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const [isPlaying, setPlaying] = useState(false);
+    const [settings, setSettings] = useState<AppSettings>(loadSettings);
 
-    // Persist books & notes
-    useEffect(() => {
-        localStorage.setItem(BOOKS_KEY, JSON.stringify(books));
-    }, [books]);
-    useEffect(() => {
-        localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
-    }, [notes]);
+    // Persist
+    useEffect(() => { localStorage.setItem(BOOKS_KEY, JSON.stringify(books)); }, [books]);
+    useEffect(() => { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }, [notes]);
+    useEffect(() => { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }, [settings]);
 
     // Global Cmd+K shortcut
     useEffect(() => {
@@ -127,6 +169,14 @@ export function BookProvider({ children }: { children: React.ReactNode }) {
             if ((e.metaKey || e.ctrlKey) && e.key === "k") {
                 e.preventDefault();
                 setCommandOpen((v) => !v);
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+                e.preventDefault();
+                setSettingsOpen((v) => !v);
+            }
+            if (e.key === "Escape") {
+                setCommandOpen(false);
+                setSettingsOpen(false);
             }
         };
         window.addEventListener("keydown", handler);
@@ -178,7 +228,11 @@ export function BookProvider({ children }: { children: React.ReactNode }) {
         (id: string) => {
             const book = books.find((b) => b.id === id);
             if (!book) return;
-            const updated = { ...book, lastOpenedAt: new Date().toISOString() };
+            const today = todayISO();
+            const readingDates = book.readingDates?.includes(today)
+                ? book.readingDates
+                : [...(book.readingDates || []), today];
+            const updated = { ...book, lastOpenedAt: new Date().toISOString(), readingDates };
             setActiveBook(updated);
             setBooks((prev) => prev.map((b) => (b.id === id ? updated : b)));
             setCurrentView("reader");
@@ -204,6 +258,52 @@ export function BookProvider({ children }: { children: React.ReactNode }) {
         },
         [updateBook],
     );
+
+    const toggleFavorite = useCallback((id: string) => {
+        setBooks((prev) =>
+            prev.map((b) =>
+                b.id === id ? { ...b, isFavorite: !b.isFavorite, updatedAt: new Date().toISOString() } : b
+            )
+        );
+        setActiveBook((prev) =>
+            prev?.id === id ? { ...prev, isFavorite: !prev.isFavorite } : prev
+        );
+    }, []);
+
+    const addBookmark = useCallback((bookId: string, bm: Omit<Bookmark, "id" | "createdAt">) => {
+        const bookmark: Bookmark = {
+            ...bm,
+            id: crypto.randomUUID(),
+            createdAt: new Date().toISOString(),
+        };
+        setBooks((prev) =>
+            prev.map((b) =>
+                b.id === bookId
+                    ? { ...b, bookmarks: [...(b.bookmarks || []), bookmark] }
+                    : b
+            )
+        );
+        setActiveBook((prev) =>
+            prev?.id === bookId
+                ? { ...prev, bookmarks: [...(prev.bookmarks || []), bookmark] }
+                : prev
+        );
+    }, []);
+
+    const removeBookmark = useCallback((bookId: string, bmId: string) => {
+        setBooks((prev) =>
+            prev.map((b) =>
+                b.id === bookId
+                    ? { ...b, bookmarks: (b.bookmarks || []).filter((bm) => bm.id !== bmId) }
+                    : b
+            )
+        );
+        setActiveBook((prev) =>
+            prev?.id === bookId
+                ? { ...prev, bookmarks: (prev.bookmarks || []).filter((bm) => bm.id !== bmId) }
+                : prev
+        );
+    }, []);
 
     const addNote = useCallback((bookId: string, title: string) => {
         const now = new Date().toISOString();
@@ -262,6 +362,18 @@ export function BookProvider({ children }: { children: React.ReactNode }) {
         [notes],
     );
 
+    const getLastReadBook = useCallback((): Book | null => {
+        const withDate = books.filter((b) => b.lastOpenedAt);
+        if (!withDate.length) return null;
+        return withDate.reduce((a, b) =>
+            (a.lastOpenedAt! > b.lastOpenedAt! ? a : b)
+        );
+    }, [books]);
+
+    const updateSettings = useCallback((patch: Partial<AppSettings>) => {
+        setSettings((prev) => ({ ...prev, ...patch }));
+    }, []);
+
     return (
         <BookContext.Provider
             value={{
@@ -272,14 +384,19 @@ export function BookProvider({ children }: { children: React.ReactNode }) {
                 currentView,
                 showNotes,
                 isCommandOpen,
+                isSettingsOpen,
                 audioUrl,
                 isPlaying,
+                settings,
                 addBook,
                 updateBook,
                 deleteBook,
                 openBook,
                 closeBook,
                 saveProgress,
+                toggleFavorite,
+                addBookmark,
+                removeBookmark,
                 addNote,
                 updateNote,
                 deleteNote,
@@ -287,9 +404,12 @@ export function BookProvider({ children }: { children: React.ReactNode }) {
                 setView: setCurrentView,
                 setShowNotes,
                 setCommandOpen,
+                setSettingsOpen,
                 setAudioUrl,
                 setPlaying,
+                updateSettings,
                 notesForBook,
+                getLastReadBook,
             }}
         >
             {children}

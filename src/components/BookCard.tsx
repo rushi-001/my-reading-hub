@@ -9,7 +9,6 @@ import {
     Edit3,
     Play,
     Heart,
-    HeartHandshake,
 } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
 import type { Book } from "@/types/book";
@@ -39,9 +38,8 @@ export function BookCard({
     book: Book;
     onEdit: (book: Book) => void;
 }) {
-    const { openBook, deleteBook } = useBooks();
+    const { openBook, deleteBook, toggleFavorite } = useBooks();
     const [hover, setHover] = useState(false);
-    const [isFavorite, setIsFavorite] = useState();
 
     const initials = book.title
         .split(" ")
@@ -59,8 +57,7 @@ export function BookCard({
             transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
-            className="group relative border border-muted bg-surface-1 cursor-pointer
-        hover:border-muted-foreground transition-colors duration-100"
+            className="group relative border border-muted bg-surface-1 cursor-pointer hover:border-muted-foreground transition-colors duration-100"
             onClick={() => openBook(book.id)}
         >
             {/* Cover area */}
@@ -80,10 +77,17 @@ export function BookCard({
                 )}
 
                 {/* Format badge */}
-                <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/90 border border-muted px-2 py-1.5 text-[12px] text-muted-foreground font-mono uppercase tracking-wider">
+                <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/90 border border-muted px-1.5 py-1 text-[11px] text-muted-foreground font-mono uppercase tracking-wider">
                     {FORMAT_ICON[book.format]}
-                    {FORMAT_LABEL[book.format]}
+                    <span className="ml-0.5">{FORMAT_LABEL[book.format]}</span>
                 </div>
+
+                {/* Favorite indicator on cover */}
+                {book.isFavorite && (
+                    <div className="absolute top-2 right-2">
+                        <Heart size={12} className="fill-terminal text-terminal" />
+                    </div>
+                )}
 
                 {/* Hover overlay */}
                 {hover && (
@@ -101,29 +105,33 @@ export function BookCard({
 
             {/* Meta */}
             <div className="p-3 border-t border-muted">
-                <div className="flex flex-row justify-between items-center">
-                    <div>
-                        <h3 className="text-xs font-medium text-foreground truncate leading-snug">
+                <div className="flex flex-row justify-between items-start gap-1">
+                    <div className="min-w-0 flex-1">
+                        <h3 className="text-[12px] font-medium text-foreground truncate leading-snug">
                             {book.title}
                         </h3>
-                        <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                        <p className="text-[11px] text-muted-foreground truncate mt-0.5">
                             {book.author}
                         </p>
                     </div>
 
                     {/* Favorite button */}
                     <button
-                        className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-foreground"
+                        className={`shrink-0 border p-1 transition-colors ${
+                            book.isFavorite
+                                ? "border-terminal text-terminal bg-terminal/10"
+                                : "border-muted text-muted-foreground hover:text-foreground hover:border-muted-foreground bg-background"
+                        }`}
                         onClick={(e) => {
                             e.stopPropagation();
+                            toggleFavorite(book.id);
                         }}
-                        title={
-                            isFavorite
-                                ? "Remove from favorites"
-                                : "Add to favorites"
-                        }
+                        title={book.isFavorite ? "Remove from favorites" : "Add to favorites"}
                     >
-                        <Heart size={15} />
+                        <Heart
+                            size={12}
+                            className={book.isFavorite ? "fill-current" : ""}
+                        />
                     </button>
                 </div>
 
@@ -133,7 +141,7 @@ export function BookCard({
                         {Array.from({ length: 5 }).map((_, i) => (
                             <Star
                                 key={i}
-                                size={12}
+                                size={10}
                                 className={
                                     i < book.rating
                                         ? "fill-terminal text-terminal"
@@ -145,37 +153,54 @@ export function BookCard({
                 )}
 
                 {/* Progress bar */}
-                <div className="mt-2 h-px bg-muted overflow-hidden">
-                    <div
-                        className="h-full bg-terminal transition-all duration-300"
-                        style={{ width: `${book.progress}%` }}
-                    />
+                <div className="mt-2 flex items-center gap-1.5">
+                    <div className="flex-1 h-px bg-muted overflow-hidden">
+                        <div
+                            className="h-full bg-terminal transition-all duration-300"
+                            style={{ width: `${book.progress}%` }}
+                        />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                        {book.progress}%
+                    </span>
                 </div>
             </div>
 
-            {/* Card actions */}
+            {/* Card actions — appear on hover */}
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                {/* Edit button */}
+                {!book.isFavorite && (
+                    <button
+                        className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit(book);
+                        }}
+                        title="Edit book"
+                    >
+                        <Edit3 size={13} />
+                    </button>
+                )}
+                {book.isFavorite && (
+                    <button
+                        className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit(book);
+                        }}
+                        title="Edit book"
+                    >
+                        <Edit3 size={13} />
+                    </button>
+                )}
                 <button
-                    className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-foreground"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onEdit(book);
-                    }}
-                    title="Edit book"
-                >
-                    <Edit3 size={15} />
-                </button>
-                {/* Delete button */}
-                <button
-                    className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-foreground"
+                    className="bg-background border border-muted p-1 text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
                     onClick={(e) => {
                         e.stopPropagation();
                         deleteBook(book.id);
                     }}
                     title="Delete book"
                 >
-                    <Trash2 size={15} />
+                    <Trash2 size={13} />
                 </button>
             </div>
         </motion.div>

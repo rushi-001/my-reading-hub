@@ -68,6 +68,10 @@ export function AddBookDrawer({ open, onClose }: Props) {
       totalPages: 0,
       tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
       lastOpenedAt: null,
+      groupId: null,
+      isFavorite: false,
+      readingDates: [],
+      bookmarks: [],
     });
     reset();
     onClose();
