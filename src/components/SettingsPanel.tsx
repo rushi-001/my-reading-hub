@@ -67,7 +67,7 @@ export function SettingsPanel() {
                     <PillBtn
                       active={settings.commandPalettePosition === "top"}
                       onClick={() => updateSettings({ commandPalettePosition: "top" })}
-                      icon={<AlignTop size={12} />}
+                      icon={<ArrowUpToLine size={12} />}
                       label="Top"
                     />
                     <PillBtn
