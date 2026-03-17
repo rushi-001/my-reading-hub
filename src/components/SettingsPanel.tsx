@@ -4,9 +4,7 @@ import {
   Eye,
   EyeOff,
   AlignCenter,
-  AlignTop,
-  Layers,
-  BookOpen,
+  AlignStartVertical,
   Settings,
 } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
