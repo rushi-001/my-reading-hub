@@ -14,9 +14,22 @@ export interface Book {
     currentPage: number;
     totalPages: number;
     tags: string[];
+    groupId: string | null; // book group/stack
+    isFavorite: boolean;
+    readingDates: string[]; // ISO date strings (YYYY-MM-DD) when user read this
+    bookmarks: Bookmark[]; // word/line bookmarks
     createdAt: string; // ISO
     updatedAt: string;
     lastOpenedAt: string | null;
+}
+
+export interface Bookmark {
+    id: string;
+    type: "line" | "word";
+    page: number;
+    text: string;
+    note?: string;
+    createdAt: string;
 }
 
 export interface Note {
@@ -28,4 +41,13 @@ export interface Note {
     updatedAt: string;
 }
 
-export type AppView = "library" | "reader" | "notes";
+export interface AppSettings {
+    showIcons: boolean; // command palette icons
+    commandPalettePosition: "top" | "center";
+    stackGroups: boolean; // show books as stacked groups
+    stackMaxVisible: number; // 2-5
+    autoScrollSpeed: number; // 0 = off, 1-5
+    sidebarVisible: boolean;
+}
+
+export type AppView = "library" | "reader" | "notes" | "calendar";
