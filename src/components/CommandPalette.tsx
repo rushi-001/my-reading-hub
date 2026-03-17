@@ -10,17 +10,20 @@ import {
   Plus,
   ArrowRight,
   Star,
+  Play,
+  Clock,
+  Settings,
 } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
 import type { Book } from "@/types/book";
 
-const FORMAT_ICONS = {
-  pdf:     <FileText size={13} />,
-  epub:    <BookOpen size={13} />,
-  audio:   <Headphones size={13} />,
-  video:   <Headphones size={13} />,
-  podcast: <Headphones size={13} />,
-  url:     <BookOpen size={13} />,
+const FORMAT_ICONS: Record<string, React.ReactNode> = {
+  pdf:     <FileText size={15} />,
+  epub:    <BookOpen size={15} />,
+  audio:   <Headphones size={15} />,
+  video:   <Play size={15} />,
+  podcast: <Headphones size={15} />,
+  url:     <BookOpen size={15} />,
 };
 
 export function CommandPalette() {
@@ -30,7 +33,9 @@ export function CommandPalette() {
     setCommandOpen,
     openBook,
     setView,
-    addBook,
+    getLastReadBook,
+    settings,
+    setSettingsOpen,
   } = useBooks();
 
   const [query, setQuery] = useState("");
@@ -41,7 +46,7 @@ export function CommandPalette() {
     threshold: 0.35,
   });
 
-  const results: Book[] =
+  const searchResults: Book[] =
     query.trim().length > 0
       ? fuse.search(query).map((r) => r.item)
       : books.slice(0, 8);
@@ -59,6 +64,12 @@ export function CommandPalette() {
     openBook(bookId);
     close();
   };
+
+  const lastRead = getLastReadBook();
+
+  const positionClass = settings.commandPalettePosition === "center"
+    ? "top-1/2 -translate-y-1/2"
+    : "top-[15vh]";
 
   return (
     <AnimatePresence>
@@ -82,7 +93,7 @@ export function CommandPalette() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: -8 }}
             transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed left-1/2 top-[20vh] z-50 -translate-x-1/2 w-[640px] max-w-[95vw]"
+            className={`fixed left-1/2 z-50 -translate-x-1/2 w-[640px] max-w-[95vw] ${positionClass}`}
           >
             <Command
               className="border border-muted bg-background overflow-hidden"
@@ -90,68 +101,88 @@ export function CommandPalette() {
             >
               {/* Input */}
               <div className="flex items-center border-b border-muted px-4 gap-3">
-                <Search size={14} className="text-muted-foreground shrink-0" />
+                <Search size={15} className="text-muted-foreground shrink-0" />
                 <Command.Input
                   ref={inputRef}
                   value={query}
                   onValueChange={setQuery}
-                  placeholder="Search books, notes, authors…"
-                  className="flex-1 bg-transparent py-4 text-sm text-foreground placeholder:text-muted-foreground outline-none font-mono"
+                  placeholder="Search books, authors, tags…"
+                  className="flex-1 bg-transparent py-4 text-[12px] text-foreground placeholder:text-muted-foreground outline-none font-mono"
                 />
                 <kbd className="text-[10px] text-muted-foreground border border-muted px-1.5 py-0.5 shrink-0">
                   ESC
                 </kbd>
               </div>
 
-              <Command.List className="max-h-[360px] overflow-y-auto p-1">
-                {/* Navigation commands */}
-                {query === "" && (
-                  <Command.Group
-                    heading={
-                      <span className="px-3 py-1.5 text-[10px] tracking-widest text-muted-foreground uppercase">
-                        Quick Navigation
-                      </span>
-                    }
-                  >
+              <Command.List className="max-h-[400px] overflow-y-auto p-1">
+                {/* Quick Navigation — always visible */}
+                <Command.Group
+                  heading={
+                    <span className="px-3 py-1.5 text-[10px] tracking-widest text-muted-foreground uppercase block">
+                      Quick Actions
+                    </span>
+                  }
+                >
+                  <PaletteItem
+                    icon={settings.showIcons ? <BookOpen size={15} /> : null}
+                    label="Go to Library"
+                    hint="view all books"
+                    onSelect={() => { setView("library"); close(); }}
+                  />
+                  <PaletteItem
+                    icon={settings.showIcons ? <Plus size={15} /> : null}
+                    label="Add New Book"
+                    hint="import or link"
+                    onSelect={() => { setView("library"); close(); }}
+                  />
+                  <PaletteItem
+                    icon={settings.showIcons ? <BookOpen size={15} /> : null}
+                    label="Reading Calendar"
+                    hint="see reading history"
+                    onSelect={() => { setView("calendar"); close(); }}
+                  />
+                  {lastRead && (
                     <PaletteItem
-                      icon={<BookOpen size={13} />}
-                      label="Go to Library"
-                      hint="view all books"
-                      onSelect={() => { setView("library"); close(); }}
+                      icon={settings.showIcons ? <Clock size={15} /> : null}
+                      label={`Continue: ${lastRead.title}`}
+                      hint={`${lastRead.progress}% · ${lastRead.author}`}
+                      onSelect={() => { openBook(lastRead.id); close(); }}
                     />
-                    <PaletteItem
-                      icon={<Plus size={13} />}
-                      label="Add New Book"
-                      hint="import or link"
-                      onSelect={() => { setView("library"); close(); }}
-                    />
-                  </Command.Group>
-                )}
+                  )}
+                  <PaletteItem
+                    icon={settings.showIcons ? <Settings size={15} /> : null}
+                    label="Settings"
+                    hint="⌘,"
+                    onSelect={() => { setSettingsOpen(true); close(); }}
+                  />
+                </Command.Group>
 
                 {/* Book results */}
-                {results.length > 0 && (
+                {searchResults.length > 0 && (
                   <Command.Group
                     heading={
-                      <span className="px-3 py-1.5 text-[10px] tracking-widest text-muted-foreground uppercase">
+                      <span className="px-3 py-1.5 text-[10px] tracking-widest text-muted-foreground uppercase block">
                         {query ? "Results" : "Recent Books"}
                       </span>
                     }
                   >
-                    {results.map((book) => (
+                    {searchResults.map((book) => (
                       <Command.Item
                         key={book.id}
                         value={book.id}
                         onSelect={() => handleSelect(book.id)}
-                        className="group flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded-sm
+                        className="group flex items-center gap-3 px-3 py-2.5 cursor-pointer
                           text-muted-foreground hover:bg-foreground hover:text-background
                           aria-selected:bg-foreground aria-selected:text-background
                           transition-colors duration-75"
                       >
-                        <span className="shrink-0 opacity-60">
-                          {FORMAT_ICONS[book.format]}
-                        </span>
+                        {settings.showIcons && (
+                          <span className="shrink-0 opacity-60">
+                            {FORMAT_ICONS[book.format]}
+                          </span>
+                        )}
                         <span className="flex-1 min-w-0">
-                          <span className="block text-sm font-medium truncate leading-tight">
+                          <span className="block text-[12px] font-medium truncate leading-tight">
                             {book.title}
                           </span>
                           <span className="block text-[11px] opacity-60 truncate">
@@ -166,18 +197,18 @@ export function CommandPalette() {
                         {book.rating > 0 && (
                           <span className="flex gap-0.5 shrink-0">
                             {Array.from({ length: book.rating }).map((_, i) => (
-                              <Star key={i} size={9} className="fill-current text-terminal opacity-80" />
+                              <Star key={i} size={10} className="fill-current text-terminal opacity-80" />
                             ))}
                           </span>
                         )}
-                        <ArrowRight size={12} className="shrink-0 opacity-40" />
+                        <ArrowRight size={13} className="shrink-0 opacity-40" />
                       </Command.Item>
                     ))}
                   </Command.Group>
                 )}
 
-                {results.length === 0 && query.length > 0 && (
-                  <Command.Empty className="py-8 text-center text-sm text-muted-foreground">
+                {searchResults.length === 0 && query.length > 0 && (
+                  <Command.Empty className="py-8 text-center text-[12px] text-muted-foreground">
                     No books found for "{query}"
                   </Command.Empty>
                 )}
@@ -195,7 +226,7 @@ export function CommandPalette() {
                   <kbd className="border border-muted px-1">Esc</kbd> close
                 </span>
                 <span className="ml-auto tabular-nums opacity-60">
-                  {results.length} books
+                  {searchResults.length} books
                 </span>
               </div>
             </Command>
@@ -220,17 +251,17 @@ function PaletteItem({
   return (
     <Command.Item
       onSelect={onSelect}
-      className="flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded-sm
+      className="flex items-center gap-3 px-3 py-2.5 cursor-pointer
         text-muted-foreground hover:bg-foreground hover:text-background
         aria-selected:bg-foreground aria-selected:text-background
         transition-colors duration-75"
     >
-      <span className="shrink-0 opacity-60">{icon}</span>
-      <span className="flex-1 text-sm">{label}</span>
+      {icon && <span className="shrink-0 opacity-60">{icon}</span>}
+      <span className="flex-1 text-[12px]">{label}</span>
       {hint && (
         <span className="text-[11px] opacity-40">{hint}</span>
       )}
-      <ArrowRight size={12} className="opacity-40 shrink-0" />
+      <ArrowRight size={13} className="opacity-40 shrink-0" />
     </Command.Item>
   );
 }
