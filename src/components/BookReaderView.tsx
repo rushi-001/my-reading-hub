@@ -41,7 +41,7 @@ export function BookReaderView() {
     return () => { if (scrollTimer.current) clearInterval(scrollTimer.current); };
   }, [autoScroll, settings.autoScrollSpeed]);
 
-  const bookmarks = activeBook.bookmarks || [];
+  
 
   const handleAddBookmark = () => {
     addBookmark(activeBook.id, {
