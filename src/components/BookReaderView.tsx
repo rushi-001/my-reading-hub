@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import {
   ArrowLeft, FileText, Headphones, BookOpen,
-  StickyNote, Star, Bookmark, BookmarkCheck, Play, ChevronUp, ChevronDown,
+  StickyNote, Bookmark, BookmarkCheck, Play, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { PDFReader } from "@/components/PDFReader";
 import { NoteEditor } from "@/components/NoteEditor";
@@ -15,9 +15,8 @@ export function BookReaderView() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  if (!activeBook) return null;
-
-  const isAudio = ["audio", "video", "podcast"].includes(activeBook.format);
+  const isAudio = activeBook ? ["audio", "video", "podcast"].includes(activeBook.format) : false;
+  const bookmarks = activeBook?.bookmarks || [];
 
   const handlePlayAudio = () => {
     if (activeBook.audioUrl) {
