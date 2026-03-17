@@ -8,6 +8,8 @@ import {
     Trash2,
     Edit3,
     Play,
+    Heart,
+    HeartHandshake,
 } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
 import type { Book } from "@/types/book";
@@ -22,12 +24,12 @@ const FORMAT_LABEL: Record<string, string> = {
 };
 
 const FORMAT_ICON: Record<string, React.ReactNode> = {
-    pdf: <FileText size={10} />,
-    epub: <BookOpen size={10} />,
-    audio: <Headphones size={10} />,
-    video: <Play size={10} />,
-    podcast: <Headphones size={10} />,
-    url: <BookOpen size={10} />,
+    pdf: <FileText size={15} />,
+    epub: <BookOpen size={15} />,
+    audio: <Headphones size={15} />,
+    video: <Play size={15} />,
+    podcast: <Headphones size={15} />,
+    url: <BookOpen size={15} />,
 };
 
 export function BookCard({
@@ -39,6 +41,7 @@ export function BookCard({
 }) {
     const { openBook, deleteBook } = useBooks();
     const [hover, setHover] = useState(false);
+    const [isFavorite, setIsFavorite] = useState();
 
     const initials = book.title
         .split(" ")
@@ -77,7 +80,7 @@ export function BookCard({
                 )}
 
                 {/* Format badge */}
-                <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/90 border border-muted px-1.5 py-0.5 text-[9px] text-muted-foreground font-mono uppercase tracking-wider">
+                <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/90 border border-muted px-2 py-1.5 text-[12px] text-muted-foreground font-mono uppercase tracking-wider">
                     {FORMAT_ICON[book.format]}
                     {FORMAT_LABEL[book.format]}
                 </div>
@@ -98,12 +101,31 @@ export function BookCard({
 
             {/* Meta */}
             <div className="p-3 border-t border-muted">
-                <h3 className="text-xs font-medium text-foreground truncate leading-snug">
-                    {book.title}
-                </h3>
-                <p className="text-[10px] text-muted-foreground truncate mt-0.5">
-                    {book.author}
-                </p>
+                <div className="flex flex-row justify-between items-center">
+                    <div>
+                        <h3 className="text-xs font-medium text-foreground truncate leading-snug">
+                            {book.title}
+                        </h3>
+                        <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                            {book.author}
+                        </p>
+                    </div>
+
+                    {/* Favorite button */}
+                    <button
+                        className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-foreground"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                        }}
+                        title={
+                            isFavorite
+                                ? "Remove from favorites"
+                                : "Add to favorites"
+                        }
+                    >
+                        <Heart size={15} />
+                    </button>
+                </div>
 
                 {/* Stars */}
                 {book.rating > 0 && (
@@ -111,7 +133,7 @@ export function BookCard({
                         {Array.from({ length: 5 }).map((_, i) => (
                             <Star
                                 key={i}
-                                size={8}
+                                size={12}
                                 className={
                                     i < book.rating
                                         ? "fill-terminal text-terminal"
@@ -133,6 +155,7 @@ export function BookCard({
 
             {/* Card actions */}
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Edit button */}
                 <button
                     className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-foreground"
                     onClick={(e) => {
@@ -141,8 +164,9 @@ export function BookCard({
                     }}
                     title="Edit book"
                 >
-                    <Edit3 size={10} />
+                    <Edit3 size={15} />
                 </button>
+                {/* Delete button */}
                 <button
                     className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-foreground"
                     onClick={(e) => {
@@ -151,7 +175,7 @@ export function BookCard({
                     }}
                     title="Delete book"
                 >
-                    <Trash2 size={10} />
+                    <Trash2 size={15} />
                 </button>
             </div>
         </motion.div>

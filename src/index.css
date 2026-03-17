@@ -12,53 +12,64 @@
 @layer base {
   :root {
     /* Surfaces */
-    --background:      0 0% 0%;          /* #000000 pure black */
-    --foreground:      0 0% 100%;        /* #FFFFFF pure white  */
+    --background: 0 0% 0%;
+    /* #000000 pure black */
+    --foreground: 0 0% 100%;
+    /* #FFFFFF pure white  */
 
-    --card:            0 0% 4%;          /* #0A0A0A */
+    --card: 0 0% 4%;
+    /* #0A0A0A */
     --card-foreground: 0 0% 100%;
 
-    --popover:         0 0% 4%;
+    --popover: 0 0% 4%;
     --popover-foreground: 0 0% 100%;
 
     /* Brand */
-    --primary:         142 100% 50%;     /* Terminal Green #00FF41 */
+    --primary: 142 100% 50%;
+    /* Terminal Green #00FF41 */
     --primary-foreground: 0 0% 0%;
 
-    --secondary:       0 0% 9%;          /* #181818 */
+    --secondary: 0 0% 9%;
+    /* #181818 */
     --secondary-foreground: 0 0% 100%;
 
-    --muted:           0 0% 15%;         /* #262626 */
-    --muted-foreground: 0 0% 55%;        /* #8C8C8C */
+    --muted: 0 0% 15%;
+    /* #262626 */
+    --muted-foreground: 0 0% 55%;
+    /* #8C8C8C */
 
-    --accent:          142 100% 50%;     /* Same as primary — Terminal Green */
+    --accent: 142 100% 50%;
+    /* Same as primary — Terminal Green */
     --accent-foreground: 0 0% 0%;
 
-    --destructive:     0 72% 51%;        /* #E53E3E */
+    --destructive: 0 72% 51%;
+    /* #E53E3E */
     --destructive-foreground: 0 0% 100%;
 
-    --border:          0 0% 10%;         /* #1A1A1A */
-    --input:           0 0% 9%;
-    --ring:            142 100% 50%;
+    --border: 0 0% 10%;
+    /* #1A1A1A */
+    --input: 0 0% 9%;
+    --ring: 142 100% 50%;
 
-    --radius:          0px;              /* Sharp corners everywhere */
+    --radius: 0px;
+    /* Sharp corners everywhere */
 
     /* Sidebar */
-    --sidebar-background:         0 0% 3%;
-    --sidebar-foreground:         0 0% 70%;
-    --sidebar-primary:            142 100% 50%;
+    --sidebar-background: 0 0% 3%;
+    --sidebar-foreground: 0 0% 70%;
+    --sidebar-primary: 142 100% 50%;
     --sidebar-primary-foreground: 0 0% 0%;
-    --sidebar-accent:             0 0% 8%;
-    --sidebar-accent-foreground:  0 0% 100%;
-    --sidebar-border:             0 0% 10%;
-    --sidebar-ring:               142 100% 50%;
+    --sidebar-accent: 0 0% 8%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 10%;
+    --sidebar-ring: 142 100% 50%;
 
     /* Custom tokens */
-    --terminal-green:  142 100% 50%;
-    --surface-1:       0 0% 4%;
-    --surface-2:       0 0% 7%;
-    --surface-3:       0 0% 10%;
-    --gutter:          65ch;
+    --terminal-green: 142 100% 50%;
+    --surface-1: 0 0% 4%;
+    --surface-2: 0 0% 7%;
+    --surface-3: 0 0% 10%;
+    --gutter: 65ch;
   }
 }
 
@@ -85,12 +96,15 @@
     width: 4px;
     height: 4px;
   }
+
   ::-webkit-scrollbar-track {
     background: hsl(var(--background));
   }
+
   ::-webkit-scrollbar-thumb {
     background: hsl(var(--muted));
   }
+
   ::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--muted-foreground));
   }
@@ -121,26 +135,33 @@
   font-size: 14px !important;
   letter-spacing: -0.02em;
 }
+
 .cm-editor.cm-focused {
   outline: none !important;
 }
+
 .cm-scroller {
   font-family: inherit !important;
 }
+
 .cm-content {
   caret-color: hsl(var(--primary));
 }
+
 .cm-cursor {
   border-left-color: hsl(var(--primary)) !important;
 }
+
 .cm-gutters {
   background: hsl(var(--background)) !important;
   border-right: 1px solid hsl(var(--border)) !important;
   color: hsl(var(--muted-foreground)) !important;
 }
+
 .cm-activeLineGutter {
   background: hsl(var(--surface-1)) !important;
 }
+
 .cm-activeLine {
   background: hsl(var(--surface-1)) !important;
 }
@@ -149,6 +170,7 @@
 .rpv-core__viewer {
   background: hsl(var(--background)) !important;
 }
+
 .rpv-core__page-layer {
   background: hsl(var(--background)) !important;
 }

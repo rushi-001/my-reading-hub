@@ -16,13 +16,13 @@ function AppShell() {
                     <BookOpen size={14} className="text-terminal" />
                 </div>
                 <SideBtn
-                    icon={<Library size={13} />}
+                    icon={<Library size={15} />}
                     label="Library"
                     active={currentView === "library"}
                     onClick={() => setView("library")}
                 />
                 <SideBtn
-                    icon={<CmdIcon size={13} />}
+                    icon={<CmdIcon size={15} />}
                     label="Search"
                     active={false}
                     onClick={() => setCommandOpen(true)}
