@@ -23,12 +23,12 @@ const FORMAT_LABEL: Record<string, string> = {
 };
 
 const FORMAT_ICON: Record<string, React.ReactNode> = {
-    pdf: <FileText size={15} />,
-    epub: <BookOpen size={15} />,
-    audio: <Headphones size={15} />,
-    video: <Play size={15} />,
-    podcast: <Headphones size={15} />,
-    url: <BookOpen size={15} />,
+    pdf: <FileText size={13} />,
+    epub: <BookOpen size={13} />,
+    audio: <Headphones size={13} />,
+    video: <Play size={13} />,
+    podcast: <Headphones size={13} />,
+    url: <BookOpen size={13} />,
 };
 
 export function BookCard({
@@ -77,17 +77,10 @@ export function BookCard({
                 )}
 
                 {/* Format badge */}
-                <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/90 border border-muted px-1.5 py-1 text-[11px] text-muted-foreground font-mono uppercase tracking-wider">
+                <div className="absolute top-2 left-2 flex items-center gap-1 bg-background/90 border border-muted px-1.5 py-0.5 text-[10px] text-muted-foreground font-mono uppercase tracking-wider">
                     {FORMAT_ICON[book.format]}
-                    <span className="ml-0.5">{FORMAT_LABEL[book.format]}</span>
+                    <span>{FORMAT_LABEL[book.format]}</span>
                 </div>
-
-                {/* Favorite indicator on cover */}
-                {book.isFavorite && (
-                    <div className="absolute top-2 right-2">
-                        <Heart size={12} className="fill-terminal text-terminal" />
-                    </div>
-                )}
 
                 {/* Hover overlay */}
                 {hover && (
@@ -96,7 +89,7 @@ export function BookCard({
                         animate={{ opacity: 1 }}
                         className="absolute inset-0 bg-background/70 flex items-center justify-center"
                     >
-                        <span className="text-xs font-mono text-foreground border border-foreground px-3 py-1">
+                        <span className="text-[11px] font-mono text-foreground border border-foreground px-3 py-1">
                             Open
                         </span>
                     </motion.div>
@@ -120,7 +113,7 @@ export function BookCard({
                         className={`shrink-0 border p-1 transition-colors ${
                             book.isFavorite
                                 ? "border-terminal text-terminal bg-terminal/10"
-                                : "border-muted text-muted-foreground hover:text-foreground hover:border-muted-foreground bg-background"
+                                : "border-muted text-muted-foreground hover:text-terminal hover:border-terminal/50 bg-background"
                         }`}
                         onClick={(e) => {
                             e.stopPropagation();
@@ -129,7 +122,7 @@ export function BookCard({
                         title={book.isFavorite ? "Remove from favorites" : "Add to favorites"}
                     >
                         <Heart
-                            size={12}
+                            size={11}
                             className={book.isFavorite ? "fill-current" : ""}
                         />
                     </button>
@@ -166,32 +159,18 @@ export function BookCard({
                 </div>
             </div>
 
-            {/* Card actions — appear on hover */}
+            {/* Card actions on hover — top-right corner */}
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                {!book.isFavorite && (
-                    <button
-                        className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onEdit(book);
-                        }}
-                        title="Edit book"
-                    >
-                        <Edit3 size={13} />
-                    </button>
-                )}
-                {book.isFavorite && (
-                    <button
-                        className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onEdit(book);
-                        }}
-                        title="Edit book"
-                    >
-                        <Edit3 size={13} />
-                    </button>
-                )}
+                <button
+                    className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onEdit(book);
+                    }}
+                    title="Edit book"
+                >
+                    <Edit3 size={12} />
+                </button>
                 <button
                     className="bg-background border border-muted p-1 text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
                     onClick={(e) => {
@@ -200,7 +179,7 @@ export function BookCard({
                     }}
                     title="Delete book"
                 >
-                    <Trash2 size={13} />
+                    <Trash2 size={12} />
                 </button>
             </div>
         </motion.div>
