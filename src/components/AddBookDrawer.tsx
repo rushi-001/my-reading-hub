@@ -4,6 +4,7 @@ import { X, Upload, Link2, FileText, Headphones } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
 import { CoverUpload, StarRating } from "@/components/ui/BookUI";
 import type { BookFormat } from "@/types/book";
+import { useNavigate } from "react-router-dom";
 
 interface Props {
   open: boolean;
@@ -20,6 +21,7 @@ const FORMATS: { value: BookFormat; label: string; icon: React.ReactNode }[] = [
 
 export function AddBookDrawer({ open, onClose }: Props) {
   const { addBook, openBook } = useBooks();
+  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle]       = useState("");
@@ -72,10 +74,12 @@ export function AddBookDrawer({ open, onClose }: Props) {
       isFavorite: false,
       readingDates: [],
       bookmarks: [],
+      attachments: [],
     });
     reset();
     onClose();
     openBook(book.id);
+    navigate(`/reader/${book.id}`);
   };
 
   return (

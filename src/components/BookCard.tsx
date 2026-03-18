@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
 import type { Book } from "@/types/book";
+import { useNavigate } from "react-router-dom";
 
 const FORMAT_LABEL: Record<string, string> = {
     pdf: "PDF",
@@ -39,6 +40,7 @@ export function BookCard({
     onEdit: (book: Book) => void;
 }) {
     const { openBook, deleteBook, toggleFavorite } = useBooks();
+    const navigate = useNavigate();
     const [hover, setHover] = useState(false);
 
     const initials = book.title
@@ -47,6 +49,11 @@ export function BookCard({
         .map((w) => w[0])
         .join("")
         .toUpperCase();
+
+    const handleOpen = () => {
+        openBook(book.id);
+        navigate(`/reader/${book.id}`);
+    };
 
     return (
         <motion.div
@@ -58,7 +65,7 @@ export function BookCard({
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
             className="group relative border border-muted bg-surface-1 cursor-pointer hover:border-muted-foreground transition-colors duration-100"
-            onClick={() => openBook(book.id)}
+            onClick={handleOpen}
         >
             {/* Cover area */}
             <div className="relative aspect-[2/3] overflow-hidden bg-surface-2">
