@@ -1,4 +1,4 @@
-import { BookProvider, useBooks } from "@/store/bookStore";
+import { useBooks } from "@/store/bookStore";
 import { AudioPlayerBar } from "@/components/AudioPlayerBar";
 import { CommandPalette } from "@/components/CommandPalette";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
@@ -46,6 +46,25 @@ function AppShell() {
             const key = event.key.toLowerCase();
             const typing = isTypingElement(event.target);
             const onLibraryPage = location.pathname.startsWith("/library");
+
+            // Command palette / settings shell shortcuts.
+            if ((event.metaKey || event.ctrlKey) && key === "k") {
+                event.preventDefault();
+                setCommandOpen(true);
+                return;
+            }
+            if ((event.metaKey || event.ctrlKey) && event.key === ",") {
+                event.preventDefault();
+                setSettingsOpen(true);
+                return;
+            }
+            if (event.key === "Escape") {
+                setCommandOpen(false);
+                setSettingsOpen(false);
+                setShortcutsOpen(false);
+                setAddBookOpen(false);
+                return;
+            }
 
             // Continue reading shortcut.
             if (event.altKey && key === "c" && lastRead) {
@@ -200,9 +219,5 @@ function SideBtn({
 }
 
 export default function Index() {
-    return (
-        <BookProvider>
-            <AppShell />
-        </BookProvider>
-    );
+    return <AppShell />;
 }
