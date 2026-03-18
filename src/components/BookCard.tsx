@@ -106,6 +106,11 @@ export function BookCard({
                         <p className="text-[11px] text-muted-foreground truncate mt-0.5">
                             {book.author}
                         </p>
+                        {book.groupId && (
+                            <p className="text-[10px] text-terminal/80 truncate mt-1 font-mono">
+                                Group: {book.groupId}
+                            </p>
+                        )}
                     </div>
 
                     {/* Favorite button */}

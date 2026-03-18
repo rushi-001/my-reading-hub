@@ -55,6 +55,11 @@ export function BookStack({ books, maxVisible, onEdit }: Props) {
                             </span>
                         </div>
                     )}
+                    {topBook.groupId && (
+                        <div className="absolute top-2 left-2 bg-background/90 border border-muted px-1.5 py-0.5 text-[9px] text-muted-foreground font-mono truncate max-w-[70%]">
+                            {topBook.groupId}
+                        </div>
+                    )}
                     {/* Stack count badge */}
                     <div className="absolute top-2 right-2 flex items-center gap-1 bg-background/90 border border-muted px-1.5 py-0.5 text-[10px] text-terminal font-mono">
                         <Layers size={10} />

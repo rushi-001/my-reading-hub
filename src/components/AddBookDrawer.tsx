@@ -4,6 +4,8 @@ import { X, Upload, Link2, FileText, Headphones } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
 import { CoverUpload, StarRating } from "@/components/ui/BookUI";
 import type { BookFormat } from "@/types/book";
+import { useNavigate } from "react-router-dom";
+import { normalizeBookGroup } from "@/lib/bookSearch";
 
 interface Props {
   open: boolean;
@@ -19,8 +21,16 @@ const FORMATS: { value: BookFormat; label: string; icon: React.ReactNode }[] = [
 ];
 
 export function AddBookDrawer({ open, onClose }: Props) {
-  const { addBook, openBook } = useBooks();
+  const { addBook, openBook, books } = useBooks();
+  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
+  const groupOptions = Array.from(
+    new Set(
+      books
+        .map((book) => book.groupId)
+        .filter((group): group is string => Boolean(group)),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
 
   const [title, setTitle]       = useState("");
   const [author, setAuthor]     = useState("");
@@ -32,12 +42,13 @@ export function AddBookDrawer({ open, onClose }: Props) {
   const [audioUrl, setAudioUrl] = useState("");
   const [rating, setRating]     = useState(0);
   const [tags, setTags]         = useState("");
+  const [group, setGroup]       = useState("");
   const [error, setError]       = useState("");
 
   const reset = () => {
     setTitle(""); setAuthor(""); setDesc(""); setCover(null);
     setFormat("pdf"); setFileUrl(null); setFileName("");
-    setAudioUrl(""); setRating(0); setTags(""); setError("");
+    setAudioUrl(""); setRating(0); setTags(""); setGroup(""); setError("");
   };
 
   const handleFile = (e: ChangeEvent<HTMLInputElement>) => {
@@ -68,14 +79,16 @@ export function AddBookDrawer({ open, onClose }: Props) {
       totalPages: 0,
       tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
       lastOpenedAt: null,
-      groupId: null,
+      groupId: normalizeBookGroup(group),
       isFavorite: false,
       readingDates: [],
       bookmarks: [],
+      attachments: [],
     });
     reset();
     onClose();
     openBook(book.id);
+    navigate(`/reader/${book.id}`);
   };
 
   return (
@@ -202,6 +215,22 @@ export function AddBookDrawer({ open, onClose }: Props) {
                   placeholder="productivity, focus, technical"
                   className={INPUT_CLS}
                 />
+              </Field>
+
+              {/* Group */}
+              <Field label="Group (optional)">
+                <input
+                  value={group}
+                  onChange={(e) => setGroup(e.target.value)}
+                  placeholder="e.g. History Stack"
+                  list="group-options-add"
+                  className={INPUT_CLS}
+                />
+                <datalist id="group-options-add">
+                  {groupOptions.map((groupName) => (
+                    <option key={groupName} value={groupName} />
+                  ))}
+                </datalist>
               </Field>
 
               {/* Rating */}

@@ -4,6 +4,7 @@ import { X, Upload, Link2, FileText, Headphones } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
 import { CoverUpload, StarRating } from "@/components/ui/BookUI";
 import type { BookFormat, Book } from "@/types/book";
+import { normalizeBookGroup } from "@/lib/bookSearch";
 
 // Reusing the same formats and input styles
 const FORMATS: { value: BookFormat; label: string; icon: React.ReactNode }[] = [
@@ -24,8 +25,15 @@ interface Props {
 }
 
 export function EditBookDrawer({ open, onClose, book }: Props) {
-    const { updateBook } = useBooks();
+    const { updateBook, books } = useBooks();
     const fileRef = useRef<HTMLInputElement>(null);
+    const groupOptions = Array.from(
+        new Set(
+            books
+                .map((item) => item.groupId)
+                .filter((group): group is string => Boolean(group)),
+        ),
+    ).sort((a, b) => a.localeCompare(b));
 
     // Form State
     const [title, setTitle] = useState("");
@@ -38,6 +46,7 @@ export function EditBookDrawer({ open, onClose, book }: Props) {
     const [audioUrl, setAudioUrl] = useState("");
     const [rating, setRating] = useState(0);
     const [tags, setTags] = useState("");
+    const [group, setGroup] = useState("");
     const [error, setError] = useState("");
 
     // Reset helper
@@ -52,6 +61,7 @@ export function EditBookDrawer({ open, onClose, book }: Props) {
         setAudioUrl("");
         setRating(0);
         setTags("");
+        setGroup("");
         setError("");
     };
 
@@ -68,6 +78,7 @@ export function EditBookDrawer({ open, onClose, book }: Props) {
             setAudioUrl(book.audioUrl || "");
             setRating(book.rating);
             setTags(book.tags.join(", "));
+            setGroup(book.groupId || "");
             setError("");
         } else if (!open) {
             reset();
@@ -111,6 +122,7 @@ export function EditBookDrawer({ open, onClose, book }: Props) {
                 .split(",")
                 .map((t) => t.trim())
                 .filter(Boolean),
+            groupId: normalizeBookGroup(group),
         });
 
         onClose();
@@ -254,6 +266,21 @@ export function EditBookDrawer({ open, onClose, book }: Props) {
                                     onChange={(e) => setTags(e.target.value)}
                                     className={INPUT_CLS}
                                 />
+                            </Field>
+
+                            <Field label="Group (optional)">
+                                <input
+                                    value={group}
+                                    onChange={(e) => setGroup(e.target.value)}
+                                    placeholder="e.g. History Stack"
+                                    list="group-options-edit"
+                                    className={INPUT_CLS}
+                                />
+                                <datalist id="group-options-edit">
+                                    {groupOptions.map((groupName) => (
+                                        <option key={groupName} value={groupName} />
+                                    ))}
+                                </datalist>
                             </Field>
 
                             {/* Rating */}
