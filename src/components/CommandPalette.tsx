@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Command } from "cmdk";
 import Fuse from "fuse.js";
@@ -17,6 +17,11 @@ import {
 import { useBooks } from "@/store/bookStore";
 import type { AppSettings, Book } from "@/types/book";
 import { useNavigate } from "react-router-dom";
+import {
+    isBookQueryEmpty,
+    matchesBookQuery,
+    parseBookQuery,
+} from "@/lib/bookSearch";
 
 const FORMAT_ICONS: Record<string, React.ReactNode> = {
     pdf: <FileText size={15} />,
@@ -55,15 +60,27 @@ export function CommandPalette() {
     const [query, setQuery] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
 
-    const fuse = new Fuse(books, {
-        keys: ["title", "author", "tags", "description"],
-        threshold: 0.35,
-    });
+    const parsedQuery = useMemo(() => parseBookQuery(query), [query]);
+    const queryIsEmpty = isBookQueryEmpty(parsedQuery);
 
-    const searchResults: Book[] =
-        query.trim().length > 0
-            ? fuse.search(query).map((result) => result.item)
-            : books.slice(0, 8);
+    const filteredBooks = useMemo(
+        () => books.filter((book) => matchesBookQuery(book, parsedQuery)),
+        [books, parsedQuery],
+    );
+
+    // Fuzzy-rank by plain text tokens only after tag/group filtering is applied.
+    const rankedBooks = useMemo(() => {
+        if (queryIsEmpty) return books.slice(0, 8);
+        if (parsedQuery.textTokens.length === 0) return filteredBooks;
+
+        const textQuery = parsedQuery.textTokens.join(" ");
+        const fuse = new Fuse(filteredBooks, {
+            keys: ["title", "author", "tags", "description", "groupId"],
+            threshold: 0.35,
+        });
+        const scored = fuse.search(textQuery).map((result) => result.item);
+        return scored.length > 0 ? scored : filteredBooks;
+    }, [books, filteredBooks, parsedQuery.textTokens, queryIsEmpty]);
 
     useEffect(() => {
         if (!isCommandOpen) return;
@@ -83,7 +100,9 @@ export function CommandPalette() {
     const anchorClass =
         PALETTE_ANCHOR_CLASS[settings.commandPalettePosition] ??
         PALETTE_ANCHOR_CLASS["top-center"];
-    const enterOffsetY = settings.commandPalettePosition.startsWith("bottom") ? 8 : -8;
+    const enterOffsetY = settings.commandPalettePosition.startsWith("bottom")
+        ? 8
+        : -8;
 
     return (
         <AnimatePresence>
@@ -107,7 +126,10 @@ export function CommandPalette() {
                             initial={{ opacity: 0, scale: 0.97, y: enterOffsetY }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.97, y: enterOffsetY }}
-                            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                            transition={{
+                                duration: 0.15,
+                                ease: [0.16, 1, 0.3, 1],
+                            }}
                             className="w-[640px] max-w-[95vw] pointer-events-auto"
                         >
                             <Command
@@ -115,12 +137,15 @@ export function CommandPalette() {
                                 shouldFilter={false}
                             >
                                 <div className="flex items-center border-b border-muted px-4 gap-3">
-                                    <Search size={15} className="text-muted-foreground shrink-0" />
+                                    <Search
+                                        size={15}
+                                        className="text-muted-foreground shrink-0"
+                                    />
                                     <Command.Input
                                         ref={inputRef}
                                         value={query}
                                         onValueChange={setQuery}
-                                        placeholder="Search books, authors, tags..."
+                                        placeholder="Search books, #tags, tag:focus, group:History..."
                                         className="flex-1 bg-transparent py-4 text-[12px] text-foreground placeholder:text-muted-foreground outline-none font-mono"
                                     />
                                     <kbd className="text-[10px] text-muted-foreground border border-muted px-1.5 py-0.5 shrink-0">
@@ -129,79 +154,115 @@ export function CommandPalette() {
                                 </div>
 
                                 <Command.List className="max-h-[400px] overflow-y-auto p-1">
-                                    {/* Always-visible global actions */}
-                                    <Command.Group
-                                        heading={
-                                            <span className="px-3 py-1.5 text-[10px] tracking-widest text-muted-foreground uppercase block">
-                                                Quick Actions
-                                            </span>
-                                        }
-                                    >
-                                        <PaletteItem
-                                            icon={settings.showIcons ? <BookOpen size={15} /> : null}
-                                            label="Go to Library"
-                                            hint="view all books"
-                                            onSelect={() => {
-                                                navigate("/library");
-                                                close();
-                                            }}
-                                        />
-                                        <PaletteItem
-                                            icon={settings.showIcons ? <Plus size={15} /> : null}
-                                            label="Add New Book"
-                                            hint="open drawer"
-                                            onSelect={() => {
-                                                navigate("/library");
-                                                setAddBookOpen(true);
-                                                close();
-                                            }}
-                                        />
-                                        <PaletteItem
-                                            icon={settings.showIcons ? <BookOpen size={15} /> : null}
-                                            label="Reading Calendar"
-                                            hint="activity and history"
-                                            onSelect={() => {
-                                                navigate("/calendar");
-                                                close();
-                                            }}
-                                        />
-                                        {lastRead && (
-                                            <PaletteItem
-                                                icon={settings.showIcons ? <Clock size={15} /> : null}
-                                                label={`Continue: ${lastRead.title}`}
-                                                hint={`${lastRead.progress}% - ${lastRead.author}`}
-                                                onSelect={() => openBookFromPalette(lastRead.id)}
-                                            />
-                                        )}
-                                        <PaletteItem
-                                            icon={settings.showIcons ? <Settings size={15} /> : null}
-                                            label="Settings"
-                                            hint="Cmd/Ctrl + ,"
-                                            onSelect={() => {
-                                                setSettingsOpen(true);
-                                                close();
-                                            }}
-                                        />
-                                    </Command.Group>
-
-                                    {searchResults.length > 0 && (
+                                    {/* Hide quick actions when query is present so results are selected first. */}
+                                    {queryIsEmpty && (
                                         <Command.Group
                                             heading={
                                                 <span className="px-3 py-1.5 text-[10px] tracking-widest text-muted-foreground uppercase block">
-                                                    {query ? "Results" : "Recent Books"}
+                                                    Quick Actions
                                                 </span>
                                             }
                                         >
-                                            {searchResults.map((book) => (
+                                            <PaletteItem
+                                                icon={
+                                                    settings.showIcons ? (
+                                                        <BookOpen size={15} />
+                                                    ) : null
+                                                }
+                                                label="Go to Library"
+                                                hint="view all books"
+                                                onSelect={() => {
+                                                    navigate("/library");
+                                                    close();
+                                                }}
+                                            />
+                                            <PaletteItem
+                                                icon={
+                                                    settings.showIcons ? (
+                                                        <Plus size={15} />
+                                                    ) : null
+                                                }
+                                                label="Add New Book"
+                                                hint="open drawer"
+                                                onSelect={() => {
+                                                    navigate("/library");
+                                                    setAddBookOpen(true);
+                                                    close();
+                                                }}
+                                            />
+                                            <PaletteItem
+                                                icon={
+                                                    settings.showIcons ? (
+                                                        <BookOpen size={15} />
+                                                    ) : null
+                                                }
+                                                label="Reading Calendar"
+                                                hint="activity and history"
+                                                onSelect={() => {
+                                                    navigate("/calendar");
+                                                    close();
+                                                }}
+                                            />
+                                            {lastRead && (
+                                                <PaletteItem
+                                                    icon={
+                                                        settings.showIcons ? (
+                                                            <Clock size={15} />
+                                                        ) : null
+                                                    }
+                                                    label={`Continue: ${lastRead.title}`}
+                                                    hint={`${lastRead.progress}% - ${lastRead.author}`}
+                                                    onSelect={() =>
+                                                        openBookFromPalette(
+                                                            lastRead.id,
+                                                        )
+                                                    }
+                                                />
+                                            )}
+                                            <PaletteItem
+                                                icon={
+                                                    settings.showIcons ? (
+                                                        <Settings size={15} />
+                                                    ) : null
+                                                }
+                                                label="Settings"
+                                                hint="Cmd/Ctrl + ,"
+                                                onSelect={() => {
+                                                    setSettingsOpen(true);
+                                                    close();
+                                                }}
+                                            />
+                                        </Command.Group>
+                                    )}
+
+                                    {rankedBooks.length > 0 && (
+                                        <Command.Group
+                                            heading={
+                                                <span className="px-3 py-1.5 text-[10px] tracking-widest text-muted-foreground uppercase block">
+                                                    {queryIsEmpty
+                                                        ? "Recent Books"
+                                                        : "Results"}
+                                                </span>
+                                            }
+                                        >
+                                            {rankedBooks.map((book) => (
                                                 <Command.Item
                                                     key={book.id}
                                                     value={book.id}
-                                                    onSelect={() => openBookFromPalette(book.id)}
+                                                    onSelect={() =>
+                                                        openBookFromPalette(
+                                                            book.id,
+                                                        )
+                                                    }
                                                     className="group flex items-center gap-3 px-3 py-2.5 cursor-pointer text-muted-foreground hover:bg-foreground hover:text-background aria-selected:bg-foreground aria-selected:text-background transition-colors duration-75"
                                                 >
                                                     {settings.showIcons && (
                                                         <span className="shrink-0 opacity-60">
-                                                            {FORMAT_ICONS[book.format]}
+                                                            {
+                                                                FORMAT_ICONS[
+                                                                    book.format
+                                                                ]
+                                                            }
                                                         </span>
                                                     )}
                                                     <span className="flex-1 min-w-0">
@@ -217,7 +278,9 @@ export function CommandPalette() {
                                                     </span>
                                                     {book.rating > 0 && (
                                                         <span className="flex gap-0.5 shrink-0">
-                                                            {Array.from({ length: book.rating }).map((_, index) => (
+                                                            {Array.from({
+                                                                length: book.rating,
+                                                            }).map((_, index) => (
                                                                 <Star
                                                                     key={index}
                                                                     size={10}
@@ -226,13 +289,16 @@ export function CommandPalette() {
                                                             ))}
                                                         </span>
                                                     )}
-                                                    <ArrowRight size={13} className="shrink-0 opacity-40" />
+                                                    <ArrowRight
+                                                        size={13}
+                                                        className="shrink-0 opacity-40"
+                                                    />
                                                 </Command.Item>
                                             ))}
                                         </Command.Group>
                                     )}
 
-                                    {searchResults.length === 0 && query.length > 0 && (
+                                    {rankedBooks.length === 0 && !queryIsEmpty && (
                                         <Command.Empty className="py-8 text-center text-[12px] text-muted-foreground">
                                             No books found for "{query}"
                                         </Command.Empty>
@@ -241,16 +307,25 @@ export function CommandPalette() {
 
                                 <div className="border-t border-muted px-4 py-2 flex items-center gap-4 text-[10px] text-muted-foreground">
                                     <span className="flex items-center gap-1">
-                                        <kbd className="border border-muted px-1">Up/Down</kbd> navigate
+                                        <kbd className="border border-muted px-1">
+                                            Up/Down
+                                        </kbd>{" "}
+                                        navigate
                                     </span>
                                     <span className="flex items-center gap-1">
-                                        <kbd className="border border-muted px-1">Enter</kbd> open
+                                        <kbd className="border border-muted px-1">
+                                            Enter
+                                        </kbd>{" "}
+                                        open
                                     </span>
                                     <span className="flex items-center gap-1">
-                                        <kbd className="border border-muted px-1">Esc</kbd> close
+                                        <kbd className="border border-muted px-1">
+                                            Esc
+                                        </kbd>{" "}
+                                        close
                                     </span>
                                     <span className="ml-auto tabular-nums opacity-60">
-                                        {searchResults.length} books
+                                        {rankedBooks.length} books
                                     </span>
                                 </div>
                             </Command>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import {
     BookOpen,
@@ -13,6 +13,7 @@ import { AddBookDrawer } from "@/components/AddBookDrawer";
 import { BookCard } from "@/components/BookCard";
 import { BookStack } from "@/components/BookStack";
 import { EditBookDrawer } from "@/components/EditBookDrawer";
+import { matchesBookQuery, parseBookQuery } from "@/lib/bookSearch";
 import { useBooks } from "@/store/bookStore";
 import type { Book } from "@/types/book";
 import { useNavigate } from "react-router-dom";
@@ -31,6 +32,7 @@ export function LibraryView() {
     const {
         books,
         settings,
+        updateSettings,
         setCommandOpen,
         isAddBookOpen,
         setAddBookOpen,
@@ -39,11 +41,24 @@ export function LibraryView() {
 
     // Local UI state for filters/search/edit drawer.
     const [filter, setFilter] = useState("all");
+    const [groupFilter, setGroupFilter] = useState("all");
     const [search, setSearch] = useState("");
     const [editOpen, setEditOpen] = useState(false);
     const [editingBook, setEditingBook] = useState<Book | null>(null);
 
-    const normalizedQuery = search.trim().toLowerCase();
+    const parsedQuery = useMemo(() => parseBookQuery(search), [search]);
+    const groupOptions = useMemo(
+        () =>
+            Array.from(
+                new Set(
+                    books
+                        .map((book) => book.groupId)
+                        .filter((group): group is string => Boolean(group)),
+                ),
+            ).sort((a, b) => a.localeCompare(b)),
+        [books],
+    );
+
     const filtered = books.filter((book) => {
         const matchesFilter =
             filter === "all"
@@ -51,12 +66,10 @@ export function LibraryView() {
                 : filter === "favorites"
                   ? book.isFavorite
                   : book.format === filter;
-        const matchesSearch =
-            normalizedQuery.length === 0 ||
-            book.title.toLowerCase().includes(normalizedQuery) ||
-            book.author.toLowerCase().includes(normalizedQuery) ||
-            book.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery));
-        return matchesFilter && matchesSearch;
+        const matchesGroup =
+            groupFilter === "all" ? true : book.groupId === groupFilter;
+        const matchesSearch = matchesBookQuery(book, parsedQuery);
+        return matchesFilter && matchesGroup && matchesSearch;
     });
 
     // Deduplicate books by id before rendering cards/stacks.
@@ -102,7 +115,7 @@ export function LibraryView() {
                             data-library-search="true"
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
-                            placeholder="Filter library..."
+                            placeholder="Filter library (try #tag or tag:focus)"
                             className="bg-transparent text-[12px] text-foreground placeholder:text-muted-foreground outline-none w-40 font-mono"
                         />
                     </div>
@@ -121,6 +134,20 @@ export function LibraryView() {
                         title="Open command palette"
                     >
                         <CmdIcon size={13} /> K
+                    </button>
+
+                    <button
+                        onClick={() =>
+                            updateSettings({ stackGroups: !settings.stackGroups })
+                        }
+                        className={`flex items-center gap-1.5 border px-3 py-2 text-[11px] transition-colors ${
+                            settings.stackGroups
+                                ? "border-terminal text-terminal"
+                                : "border-muted text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                        }`}
+                        title="Toggle grouped stacks"
+                    >
+                        <Layers size={13} />
                     </button>
 
                     <button
@@ -151,6 +178,35 @@ export function LibraryView() {
                 ))}
             </div>
 
+            {/* Group filters */}
+            {groupOptions.length > 0 && (
+                <div className="flex gap-1 mb-6 flex-wrap">
+                    <button
+                        onClick={() => setGroupFilter("all")}
+                        className={`px-3 py-1.5 text-[11px] uppercase tracking-wider border transition-colors ${
+                            groupFilter === "all"
+                                ? "border-terminal text-terminal"
+                                : "border-muted text-muted-foreground hover:border-muted-foreground"
+                        }`}
+                    >
+                        All Groups
+                    </button>
+                    {groupOptions.map((groupName) => (
+                        <button
+                            key={groupName}
+                            onClick={() => setGroupFilter(groupName)}
+                            className={`px-3 py-1.5 text-[11px] border transition-colors ${
+                                groupFilter === groupName
+                                    ? "border-terminal text-terminal"
+                                    : "border-muted text-muted-foreground hover:border-muted-foreground"
+                            }`}
+                        >
+                            {groupName}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {/* Card/stacks grid */}
             {deduped.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
@@ -171,7 +227,9 @@ export function LibraryView() {
             ) : settings.stackGroups && groupedBooks ? (
                 <AnimatePresence mode="popLayout">
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                        {Object.entries(groupedBooks.groups).map(([groupId, groupBooks]) => (
+                        {Object.entries(groupedBooks.groups)
+                            .sort(([a], [b]) => a.localeCompare(b))
+                            .map(([groupId, groupBooks]) => (
                             <BookStack
                                 key={groupId}
                                 books={groupBooks}

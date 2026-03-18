@@ -1,4 +1,10 @@
-import { ChangeEvent, useEffect, useRef, useState } from "react";
+import {
+    ChangeEvent,
+    MouseEvent as ReactMouseEvent,
+    useEffect,
+    useRef,
+    useState,
+} from "react";
 import {
     ArrowLeft,
     Bookmark,
@@ -8,17 +14,21 @@ import {
     ChevronUp,
     FileText,
     Headphones,
+    Minus,
     Paperclip,
     Play,
+    Plus,
     StickyNote,
     Trash2,
     Upload,
+    X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { NoteEditor } from "@/components/NoteEditor";
 import { PDFReader } from "@/components/PDFReader";
 import { useBooks } from "@/store/bookStore";
 import { ProgressRing, StarRating } from "@/components/ui/BookUI";
+import type { BookAttachment } from "@/types/book";
 
 function fileToDataUrl(file: File) {
     return new Promise<string>((resolve, reject) => {
@@ -27,6 +37,79 @@ function fileToDataUrl(file: File) {
         reader.onerror = () => reject(new Error("Failed to read attachment"));
         reader.readAsDataURL(file);
     });
+}
+
+function formatAttachmentSize(bytes: number) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isZoomableAttachment(attachment: BookAttachment) {
+    const mime = attachment.mimeType.toLowerCase();
+    return (
+        mime.startsWith("image/") ||
+        mime.startsWith("video/") ||
+        mime === "application/pdf" ||
+        mime.startsWith("text/") ||
+        mime.includes("json") ||
+        mime.includes("xml")
+    );
+}
+
+function AttachmentZoomPreview({ attachment }: { attachment: BookAttachment }) {
+    const mime = attachment.mimeType.toLowerCase();
+
+    if (mime.startsWith("image/")) {
+        return (
+            <img
+                src={attachment.dataUrl}
+                alt={attachment.name}
+                draggable={false}
+                className="block max-w-none h-auto bg-black/20 select-none"
+            />
+        );
+    }
+
+    if (mime.startsWith("audio/")) {
+        return (
+            <div className="w-[640px] h-[120px] flex items-center justify-center px-3">
+                <audio controls src={attachment.dataUrl} className="w-full" />
+            </div>
+        );
+    }
+
+    if (mime.startsWith("video/")) {
+        return (
+            <video
+                controls
+                src={attachment.dataUrl}
+                className="block max-w-none bg-black/20"
+            />
+        );
+    }
+
+    if (
+        mime === "application/pdf" ||
+        mime.startsWith("text/") ||
+        mime.includes("json") ||
+        mime.includes("xml")
+    ) {
+        return (
+            <iframe
+                src={attachment.dataUrl}
+                title={attachment.name}
+                className="block border-0 bg-background w-[960px] h-[1200px]"
+            />
+        );
+    }
+
+    return (
+        <div className="w-[520px] h-[220px] flex items-center justify-center text-[10px] text-muted-foreground px-2 text-center border border-muted bg-background">
+            Preview not supported for this file type
+        </div>
+    );
 }
 
 export function BookReaderView() {
@@ -51,10 +134,21 @@ export function BookReaderView() {
     const [autoScroll, setAutoScroll] = useState(false);
     const [jumpToPage, setJumpToPage] = useState<number | null>(null);
     const [attachmentError, setAttachmentError] = useState("");
+    const [previewAttachment, setPreviewAttachment] =
+        useState<BookAttachment | null>(null);
+    const [attachmentZoom, setAttachmentZoom] = useState(1);
+    const [isPreviewDragging, setIsPreviewDragging] = useState(false);
 
     const attachmentInputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const scrollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+    const previewViewportRef = useRef<HTMLDivElement>(null);
+    const previewDragStateRef = useRef<{
+        startX: number;
+        startY: number;
+        startScrollLeft: number;
+        startScrollTop: number;
+    } | null>(null);
     const isAudio = activeBook ? ["audio", "video", "podcast"].includes(activeBook.format) : false;
     const bookmarks = activeBook?.bookmarks || [];
     const attachments = activeBook?.attachments || [];
@@ -104,12 +198,56 @@ export function BookReaderView() {
         }
     }, [autoScroll, settings.autoScrollSpeed]);
 
+    // Popup viewer keyboard controls.
+    useEffect(() => {
+        if (!previewAttachment) return;
+        const zoomable = isZoomableAttachment(previewAttachment);
+        const handler = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setPreviewAttachment(null);
+                return;
+            }
+            if (!zoomable) return;
+            if (event.key === "+" || event.key === "=") {
+                event.preventDefault();
+                setAttachmentZoom((prev) => Math.min(3, prev + 0.2));
+                return;
+            }
+            if (event.key === "-" || event.key === "_") {
+                event.preventDefault();
+                setAttachmentZoom((prev) => Math.max(0.5, prev - 0.2));
+                return;
+            }
+            if (event.key === "0") {
+                event.preventDefault();
+                setAttachmentZoom(1);
+            }
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [previewAttachment]);
+
+    // Ensure drag mode ends even when mouse leaves the preview area.
+    useEffect(() => {
+        if (!isPreviewDragging) return;
+        const stopDragging = () => {
+            setIsPreviewDragging(false);
+            previewDragStateRef.current = null;
+        };
+        window.addEventListener("mouseup", stopDragging);
+        return () => window.removeEventListener("mouseup", stopDragging);
+    }, [isPreviewDragging]);
+
     // Reset per-book transient UI when reader switches to another book.
     useEffect(() => {
         setShowBookmarks(false);
         setShowAttachments(false);
         setAttachmentError("");
         setJumpToPage(null);
+        setPreviewAttachment(null);
+        setAttachmentZoom(1);
+        setIsPreviewDragging(false);
+        previewDragStateRef.current = null;
     }, [activeBook?.id]);
 
     const handleBack = () => {
@@ -155,6 +293,75 @@ export function BookReaderView() {
         } finally {
             event.target.value = "";
         }
+    };
+
+    const openAttachmentPopup = (attachment: BookAttachment) => {
+        setPreviewAttachment(attachment);
+        setAttachmentZoom(1);
+        setIsPreviewDragging(false);
+        previewDragStateRef.current = null;
+        requestAnimationFrame(() => {
+            if (previewViewportRef.current) {
+                previewViewportRef.current.scrollLeft = 0;
+                previewViewportRef.current.scrollTop = 0;
+            }
+        });
+    };
+
+    const applyAttachmentZoom = (
+        nextZoom: number,
+        anchor?: { clientX: number; clientY: number },
+    ) => {
+        const viewport = previewViewportRef.current;
+        const clamped = Math.min(3, Math.max(0.5, Number(nextZoom.toFixed(2))));
+        if (!viewport) {
+            setAttachmentZoom(clamped);
+            return;
+        }
+
+        const rect = viewport.getBoundingClientRect();
+        const anchorX = anchor ? anchor.clientX - rect.left : viewport.clientWidth / 2;
+        const anchorY = anchor ? anchor.clientY - rect.top : viewport.clientHeight / 2;
+        const worldX = (viewport.scrollLeft + anchorX) / attachmentZoom;
+        const worldY = (viewport.scrollTop + anchorY) / attachmentZoom;
+
+        setAttachmentZoom(clamped);
+
+        requestAnimationFrame(() => {
+            const nextViewport = previewViewportRef.current;
+            if (!nextViewport) return;
+            nextViewport.scrollLeft = worldX * clamped - anchorX;
+            nextViewport.scrollTop = worldY * clamped - anchorY;
+        });
+    };
+
+    const handlePreviewMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
+        if (!previewAttachment || !isZoomableAttachment(previewAttachment)) return;
+        if (event.button !== 0) return;
+        const viewport = previewViewportRef.current;
+        if (!viewport) return;
+        event.preventDefault();
+        previewDragStateRef.current = {
+            startX: event.clientX,
+            startY: event.clientY,
+            startScrollLeft: viewport.scrollLeft,
+            startScrollTop: viewport.scrollTop,
+        };
+        setIsPreviewDragging(true);
+    };
+
+    const handlePreviewMouseMove = (event: ReactMouseEvent<HTMLDivElement>) => {
+        if (!isPreviewDragging || !previewDragStateRef.current || !previewViewportRef.current) return;
+        const drag = previewDragStateRef.current;
+        previewViewportRef.current.scrollLeft =
+            drag.startScrollLeft - (event.clientX - drag.startX);
+        previewViewportRef.current.scrollTop =
+            drag.startScrollTop - (event.clientY - drag.startY);
+    };
+
+    const stopPreviewDragging = () => {
+        setIsPreviewDragging(false);
+        previewDragStateRef.current = null;
     };
 
     if (!activeBook) return null;
@@ -316,25 +523,39 @@ export function BookReaderView() {
                             No attachments yet. Use Attach to add supporting files.
                         </p>
                     ) : (
-                        <div className="flex gap-2 overflow-x-auto">
+                        <div className="flex gap-2 overflow-x-auto pb-1">
                             {attachments.map((attachment) => (
                                 <div
                                     key={attachment.id}
-                                    className="flex items-center gap-2 border border-muted px-2 py-1 text-[11px] shrink-0"
+                                    className="flex items-center gap-2 border border-muted px-2 py-1.5 min-w-[280px] shrink-0 bg-background"
                                 >
-                                    <Paperclip size={11} className="text-terminal" />
-                                    <a
-                                        href={attachment.dataUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="hover:text-foreground text-muted-foreground max-w-[220px] truncate"
-                                        title={attachment.name}
-                                    >
-                                        {attachment.name}
-                                    </a>
+                                    <Paperclip
+                                        size={11}
+                                        className="text-terminal shrink-0"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <p
+                                            className="text-[11px] text-muted-foreground truncate"
+                                            title={attachment.name}
+                                        >
+                                            {attachment.name}
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground/70">
+                                            {formatAttachmentSize(attachment.size)}
+                                        </p>
+                                    </div>
                                     <button
-                                        onClick={() => removeAttachment(activeBook.id, attachment.id)}
-                                        className="text-muted-foreground/60 hover:text-destructive"
+                                        onClick={() => openAttachmentPopup(attachment)}
+                                        className="border border-muted px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors shrink-0"
+                                        title="Open preview popup"
+                                    >
+                                        View
+                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            removeAttachment(activeBook.id, attachment.id)
+                                        }
+                                        className="text-muted-foreground/60 hover:text-destructive shrink-0"
                                         title="Remove attachment"
                                     >
                                         <Trash2 size={11} />
@@ -347,6 +568,140 @@ export function BookReaderView() {
                         <p className="text-[11px] text-destructive">{attachmentError}</p>
                     )}
                 </div>
+            )}
+
+            {/* Popup attachment viewer with zoom controls */}
+            {previewAttachment && (
+                <>
+                    <div
+                        className="fixed inset-0 z-50 bg-black/80"
+                        onClick={() => {
+                            setPreviewAttachment(null);
+                            stopPreviewDragging();
+                        }}
+                    />
+                    <div className="fixed inset-0 z-[60] p-4 sm:p-6 flex items-center justify-center pointer-events-none">
+                        <div
+                            className="pointer-events-auto w-full max-w-6xl h-[88vh] border border-muted bg-background flex flex-col"
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <div className="flex items-center gap-3 px-4 py-2 border-b border-muted">
+                                <Paperclip size={13} className="text-terminal shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                    <p
+                                        className="text-[12px] text-foreground truncate"
+                                        title={previewAttachment.name}
+                                    >
+                                        {previewAttachment.name}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                        {formatAttachmentSize(previewAttachment.size)}
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                        onClick={() =>
+                                            applyAttachmentZoom(
+                                                attachmentZoom - 0.2,
+                                            )
+                                        }
+                                        disabled={
+                                            !isZoomableAttachment(
+                                                previewAttachment,
+                                            )
+                                        }
+                                        className="w-7 h-7 border border-muted flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+                                        title="Zoom out"
+                                    >
+                                        <Minus size={12} />
+                                    </button>
+                                    <button
+                                        onClick={() => applyAttachmentZoom(1)}
+                                        disabled={
+                                            !isZoomableAttachment(
+                                                previewAttachment,
+                                            )
+                                        }
+                                        className="px-2 h-7 border border-muted text-[10px] text-muted-foreground hover:text-foreground hover:border-muted-foreground tabular-nums disabled:opacity-40 disabled:cursor-not-allowed"
+                                        title="Reset zoom"
+                                    >
+                                        {Math.round(attachmentZoom * 100)}%
+                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            applyAttachmentZoom(
+                                                attachmentZoom + 0.2,
+                                            )
+                                        }
+                                        disabled={
+                                            !isZoomableAttachment(
+                                                previewAttachment,
+                                            )
+                                        }
+                                        className="w-7 h-7 border border-muted flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+                                        title="Zoom in"
+                                    >
+                                        <Plus size={12} />
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setPreviewAttachment(null);
+                                            stopPreviewDragging();
+                                        }}
+                                        className="w-7 h-7 border border-muted flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                                        title="Close popup"
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 min-h-0 bg-surface-2 p-3">
+                                <div
+                                    ref={previewViewportRef}
+                                    className={`h-full w-full overflow-auto border border-muted bg-background ${
+                                        isZoomableAttachment(
+                                            previewAttachment,
+                                        )
+                                            ? isPreviewDragging
+                                                ? "cursor-grabbing"
+                                                : "cursor-grab"
+                                            : "cursor-default"
+                                    }`}
+                                    onMouseDown={handlePreviewMouseDown}
+                                    onMouseMove={handlePreviewMouseMove}
+                                    onMouseUp={stopPreviewDragging}
+                                    onMouseLeave={stopPreviewDragging}
+                                >
+                                    <div
+                                        className="inline-block origin-top-left"
+                                        style={{
+                                            transform: isZoomableAttachment(
+                                                previewAttachment,
+                                            )
+                                                ? `scale(${attachmentZoom})`
+                                                : undefined,
+                                        }}
+                                    >
+                                        <AttachmentZoomPreview
+                                            attachment={previewAttachment}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t border-muted px-4 py-1.5 text-[10px] text-muted-foreground flex items-center gap-2">
+                                <span>Zoom:</span>
+                                <kbd className="border border-muted px-1">+</kbd>
+                                <kbd className="border border-muted px-1">-</kbd>
+                                <kbd className="border border-muted px-1">0</kbd>
+                                <span className="ml-3">Drag to pan</span>
+                                <span className="ml-auto">Esc to close</span>
+                            </div>
+                        </div>
+                    </div>
+                </>
             )}
 
             {/* Main reading area */}
