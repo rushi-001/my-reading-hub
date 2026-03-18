@@ -1,147 +1,61 @@
-import React, {
-    createContext,
-    useContext,
-    useEffect,
-    useState,
-    useCallback,
-} from "react";
-import type { Book, Note, AppView, AppSettings, Bookmark } from "@/types/book";
-
-const BOOKS_KEY = "secondbrain_books";
-const NOTES_KEY = "secondbrain_notes";
-const SETTINGS_KEY = "secondbrain_settings";
-const COMMAND_PALETTE_POSITIONS = new Set([
-    "top-left",
-    "top-center",
-    "top-right",
-    "center-left",
-    "center-center",
-    "center-right",
-    "bottom-left",
-    "bottom-center",
-    "bottom-right",
-]);
-
-function loadBooks(): Book[] {
-    try {
-        const parsed = JSON.parse(localStorage.getItem(BOOKS_KEY) || "[]");
-        // migrate: ensure new fields exist
-        return parsed.map((b: Book) => ({
-            groupId: null,
-            isFavorite: false,
-            readingDates: [],
-            bookmarks: [],
-            ...b,
-        }));
-    } catch {
-        return [];
-    }
-}
-
-function loadNotes(): Note[] {
-    try {
-        return JSON.parse(localStorage.getItem(NOTES_KEY) || "[]");
-    } catch {
-        return [];
-    }
-}
-
-function loadSettings(): AppSettings {
-    const defaults: AppSettings = {
-        showIcons: true,
-        commandPalettePosition: "top-center",
-        stackGroups: false,
-        stackMaxVisible: 3,
-        autoScrollSpeed: 0,
-        sidebarVisible: true,
-    };
-    try {
-        const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") as Partial<AppSettings> & {
-            commandPalettePosition?: string;
-        };
-        const legacy = stored.commandPalettePosition as string | undefined;
-        let normalized = defaults.commandPalettePosition;
-
-        if (legacy === "top") normalized = "top-center";
-        else if (legacy === "center") normalized = "center-center";
-        else if (legacy && COMMAND_PALETTE_POSITIONS.has(legacy)) {
-            normalized = legacy as AppSettings["commandPalettePosition"];
-        }
-
-        return {
-            ...defaults,
-            ...stored,
-            commandPalettePosition: normalized,
-        };
-    } catch {
-        return defaults;
-    }
-}
+import { useCallback, useMemo } from "react";
+import { useDispatch, useSelector, useStore } from "react-redux";
+import type {
+    AppSettings,
+    Book,
+    BookAttachment,
+    BookFormat,
+    Bookmark,
+    Note,
+} from "@/types/book";
+import type { AppDispatch, RootState } from "@/store/appStore";
+import { bookActions } from "@/store/bookSlice";
+import {
+    commandSearchRequested,
+    createBookRequested,
+    createNoteRequested,
+    deleteBookRequested,
+    deleteNoteRequested,
+    librarySearchRequested,
+    updateBookRequested,
+    updateNoteRequested,
+    updateSettingsRequested,
+} from "@/store/bookSagaActions";
 
 const todayISO = () => new Date().toISOString().split("T")[0];
 
-// ── Demo seed books ──
-const SEED_BOOKS: Book[] = [
-    {
-        id: "seed-1",
-        title: "Deep Work",
-        author: "Cal Newport",
-        description:
-            "Rules for focused success in a distracted world. A must-read for knowledge workers.",
-        cover: null,
-        format: "audio",
-        fileUrl: null,
-        audioUrl: "https://www.youtube.com/watch?v=gTaJhjQHcf8",
-        rating: 5,
-        progress: 74,
-        currentPage: 0,
-        totalPages: 0,
-        tags: ["productivity", "focus"],
-        groupId: null,
-        isFavorite: true,
-        readingDates: [todayISO()],
-        bookmarks: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        lastOpenedAt: new Date().toISOString(),
-    },
-    {
-        id: "seed-2",
-        title: "The Pragmatic Programmer",
-        author: "David Thomas & Andrew Hunt",
-        description:
-            "From journeyman to master — a guide to software craftsmanship.",
-        cover: null,
-        format: "pdf",
-        fileUrl: null,
-        audioUrl: null,
-        rating: 5,
-        progress: 32,
-        currentPage: 87,
-        totalPages: 352,
-        tags: ["programming", "craft"],
-        groupId: null,
-        isFavorite: false,
-        readingDates: [todayISO()],
-        bookmarks: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        lastOpenedAt: null,
-    },
-];
-
-interface BookStore {
+export interface BookStore {
     books: Book[];
     notes: Note[];
     activeBook: Book | null;
     activeNote: Note | null;
-    currentView: AppView;
     showNotes: boolean;
     isCommandOpen: boolean;
     isSettingsOpen: boolean;
+    isAddBookOpen: boolean;
+    isShortcutsOpen: boolean;
     audioUrl: string | null;
     isPlaying: boolean;
     settings: AppSettings;
+    library: {
+        items: Book[];
+        query: string;
+        filter: "all" | "favorites" | BookFormat;
+        groupFilter: string;
+        page: number;
+        pageSize: number;
+        totalItems: number;
+        totalPages: number;
+        hasNextPage: boolean;
+        hasPrevPage: boolean;
+        isLoading: boolean;
+    };
+    commandSearch: {
+        query: string;
+        results: Book[];
+        totalItems: number;
+        isLoading: boolean;
+    };
     // Actions
     addBook: (book: Omit<Book, "id" | "createdAt" | "updatedAt">) => Book;
     updateBook: (id: string, patch: Partial<Book>) => void;
@@ -152,63 +66,53 @@ interface BookStore {
     toggleFavorite: (id: string) => void;
     addBookmark: (bookId: string, bm: Omit<Bookmark, "id" | "createdAt">) => void;
     removeBookmark: (bookId: string, bmId: string) => void;
+    addAttachment: (
+        bookId: string,
+        attachment: Omit<BookAttachment, "id" | "createdAt">,
+    ) => void;
+    removeAttachment: (bookId: string, attachmentId: string) => void;
     addNote: (bookId: string, title: string) => Note;
     updateNote: (id: string, patch: Partial<Note>) => void;
     deleteNote: (id: string) => void;
     openNote: (id: string) => void;
-    setView: (v: AppView) => void;
     setShowNotes: (v: boolean) => void;
     setCommandOpen: (v: boolean) => void;
     setSettingsOpen: (v: boolean) => void;
+    setAddBookOpen: (v: boolean) => void;
+    setShortcutsOpen: (v: boolean) => void;
     setAudioUrl: (url: string | null) => void;
     setPlaying: (v: boolean) => void;
     updateSettings: (patch: Partial<AppSettings>) => void;
+    searchLibrary: (params: {
+        query: string;
+        filter: "all" | "favorites" | BookFormat;
+        groupFilter: string;
+        page: number;
+        pageSize: number;
+    }) => void;
+    searchCommandBooks: (query: string, limit?: number) => void;
+    clearCommandSearch: () => void;
     notesForBook: (bookId: string) => Note[];
     getLastReadBook: () => Book | null;
 }
 
-const BookContext = createContext<BookStore | null>(null);
+export function useBooks(): BookStore {
+    const dispatch = useDispatch<AppDispatch>();
+    const reduxStore = useStore();
+    const state = useSelector((root: RootState) => root.book);
 
-export function BookProvider({ children }: { children: React.ReactNode }) {
-    const [books, setBooks] = useState<Book[]>(() => {
-        const stored = loadBooks();
-        return stored.length > 0 ? stored : SEED_BOOKS;
-    });
-    const [notes, setNotes] = useState<Note[]>(loadNotes);
-    const [activeBook, setActiveBook] = useState<Book | null>(null);
-    const [activeNote, setActiveNote] = useState<Note | null>(null);
-    const [currentView, setCurrentView] = useState<AppView>("library");
-    const [showNotes, setShowNotes] = useState(false);
-    const [isCommandOpen, setCommandOpen] = useState(false);
-    const [isSettingsOpen, setSettingsOpen] = useState(false);
-    const [audioUrl, setAudioUrl] = useState<string | null>(null);
-    const [isPlaying, setPlaying] = useState(false);
-    const [settings, setSettings] = useState<AppSettings>(loadSettings);
-
-    // Persist
-    useEffect(() => { localStorage.setItem(BOOKS_KEY, JSON.stringify(books)); }, [books]);
-    useEffect(() => { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }, [notes]);
-    useEffect(() => { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }, [settings]);
-
-    // Global Cmd+K shortcut
-    useEffect(() => {
-        const handler = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-                e.preventDefault();
-                setCommandOpen((v) => !v);
-            }
-            if ((e.metaKey || e.ctrlKey) && e.key === ",") {
-                e.preventDefault();
-                setSettingsOpen((v) => !v);
-            }
-            if (e.key === "Escape") {
-                setCommandOpen(false);
-                setSettingsOpen(false);
-            }
-        };
-        window.addEventListener("keydown", handler);
-        return () => window.removeEventListener("keydown", handler);
-    }, []);
+    const books = state.books;
+    const notes = state.notes;
+    const library = state.library;
+    const commandSearch = state.commandSearch;
+    const activeBook = useMemo(
+        () => books.find((book) => book.id === state.activeBookId) ?? null,
+        [books, state.activeBookId],
+    );
+    const activeNote = useMemo(
+        () => notes.find((note) => note.id === state.activeNoteId) ?? null,
+        [notes, state.activeNoteId],
+    );
 
     const addBook = useCallback(
         (data: Omit<Book, "id" | "createdAt" | "updatedAt">) => {
@@ -216,236 +120,322 @@ export function BookProvider({ children }: { children: React.ReactNode }) {
             const book: Book = {
                 ...data,
                 id: crypto.randomUUID(),
+                attachments: data.attachments ?? [],
                 createdAt: now,
                 updatedAt: now,
             };
-            setBooks((prev) => [book, ...prev]);
+
+            dispatch(bookActions.addBookLocal(book));
+            dispatch(createBookRequested(book));
             return book;
         },
-        [],
+        [dispatch],
     );
 
-    const updateBook = useCallback((id: string, patch: Partial<Book>) => {
-        setBooks((prev) =>
-            prev.map((b) =>
-                b.id === id
-                    ? { ...b, ...patch, updatedAt: new Date().toISOString() }
-                    : b,
-            ),
-        );
-        setActiveBook((prev) =>
-            prev?.id === id
-                ? { ...prev, ...patch, updatedAt: new Date().toISOString() }
-                : prev,
-        );
-    }, []);
+    const updateBook = useCallback(
+        (id: string, patch: Partial<Book>) => {
+            dispatch(bookActions.updateBookLocal({ id, patch }));
+            dispatch(updateBookRequested({ id, patch }));
+        },
+        [dispatch],
+    );
 
     const deleteBook = useCallback(
         (id: string) => {
-            setBooks((prev) => prev.filter((b) => b.id !== id));
-            if (activeBook?.id === id) {
-                setActiveBook(null);
-                setCurrentView("library");
-            }
+            dispatch(bookActions.deleteBookLocal(id));
+            dispatch(deleteBookRequested(id));
         },
-        [activeBook],
+        [dispatch],
     );
 
     const openBook = useCallback(
         (id: string) => {
-            const book = books.find((b) => b.id === id);
+            const latestState = reduxStore.getState() as RootState;
+            const book =
+                latestState.book.books.find((item) => item.id === id) ??
+                books.find((item) => item.id === id);
             if (!book) return;
+
             const today = todayISO();
-            const readingDates = book.readingDates?.includes(today)
+            const readingDates = book.readingDates.includes(today)
                 ? book.readingDates
-                : [...(book.readingDates || []), today];
-            const updated = { ...book, lastOpenedAt: new Date().toISOString(), readingDates };
-            setActiveBook(updated);
-            setBooks((prev) => prev.map((b) => (b.id === id ? updated : b)));
-            setCurrentView("reader");
+                : [...book.readingDates, today];
+            const patch: Partial<Book> = {
+                readingDates,
+                lastOpenedAt: new Date().toISOString(),
+            };
+
+            dispatch(bookActions.setActiveBookId(id));
+            dispatch(bookActions.updateBookLocal({ id, patch }));
+            dispatch(updateBookRequested({ id, patch }));
+
             if (book.audioUrl) {
-                setAudioUrl(book.audioUrl);
+                dispatch(bookActions.setAudioUrl(book.audioUrl));
             }
         },
-        [books],
+        [books, dispatch, reduxStore],
     );
 
     const closeBook = useCallback(() => {
-        setActiveBook(null);
-        setCurrentView("library");
-        setShowNotes(false);
-    }, []);
+        dispatch(bookActions.setActiveBookId(null));
+        dispatch(bookActions.setShowNotes(false));
+    }, [dispatch]);
 
     const saveProgress = useCallback(
         (id: string, progress: number, currentPage?: number) => {
-            updateBook(id, {
+            const patch: Partial<Book> = {
                 progress: Math.min(100, Math.max(0, progress)),
                 ...(currentPage !== undefined ? { currentPage } : {}),
-            });
+            };
+            dispatch(bookActions.updateBookLocal({ id, patch }));
+            dispatch(updateBookRequested({ id, patch }));
         },
-        [updateBook],
+        [dispatch],
     );
 
-    const toggleFavorite = useCallback((id: string) => {
-        setBooks((prev) =>
-            prev.map((b) =>
-                b.id === id ? { ...b, isFavorite: !b.isFavorite, updatedAt: new Date().toISOString() } : b
-            )
-        );
-        setActiveBook((prev) =>
-            prev?.id === id ? { ...prev, isFavorite: !prev.isFavorite } : prev
-        );
-    }, []);
+    const toggleFavorite = useCallback(
+        (id: string) => {
+            const book = books.find((item) => item.id === id);
+            if (!book) return;
+            const patch: Partial<Book> = {
+                isFavorite: !book.isFavorite,
+            };
+            dispatch(bookActions.updateBookLocal({ id, patch }));
+            dispatch(updateBookRequested({ id, patch }));
+        },
+        [books, dispatch],
+    );
 
-    const addBookmark = useCallback((bookId: string, bm: Omit<Bookmark, "id" | "createdAt">) => {
-        const bookmark: Bookmark = {
-            ...bm,
-            id: crypto.randomUUID(),
-            createdAt: new Date().toISOString(),
-        };
-        setBooks((prev) =>
-            prev.map((b) =>
-                b.id === bookId
-                    ? { ...b, bookmarks: [...(b.bookmarks || []), bookmark] }
-                    : b
-            )
-        );
-        setActiveBook((prev) =>
-            prev?.id === bookId
-                ? { ...prev, bookmarks: [...(prev.bookmarks || []), bookmark] }
-                : prev
-        );
-    }, []);
+    const addBookmark = useCallback(
+        (bookId: string, bm: Omit<Bookmark, "id" | "createdAt">) => {
+            const book = books.find((item) => item.id === bookId);
+            if (!book) return;
+            const bookmark: Bookmark = {
+                ...bm,
+                id: crypto.randomUUID(),
+                createdAt: new Date().toISOString(),
+            };
+            const patch: Partial<Book> = {
+                bookmarks: [...book.bookmarks, bookmark],
+            };
+            dispatch(bookActions.updateBookLocal({ id: bookId, patch }));
+            dispatch(updateBookRequested({ id: bookId, patch }));
+        },
+        [books, dispatch],
+    );
 
-    const removeBookmark = useCallback((bookId: string, bmId: string) => {
-        setBooks((prev) =>
-            prev.map((b) =>
-                b.id === bookId
-                    ? { ...b, bookmarks: (b.bookmarks || []).filter((bm) => bm.id !== bmId) }
-                    : b
-            )
-        );
-        setActiveBook((prev) =>
-            prev?.id === bookId
-                ? { ...prev, bookmarks: (prev.bookmarks || []).filter((bm) => bm.id !== bmId) }
-                : prev
-        );
-    }, []);
+    const removeBookmark = useCallback(
+        (bookId: string, bmId: string) => {
+            const book = books.find((item) => item.id === bookId);
+            if (!book) return;
+            const patch: Partial<Book> = {
+                bookmarks: book.bookmarks.filter((bookmark) => bookmark.id !== bmId),
+            };
+            dispatch(bookActions.updateBookLocal({ id: bookId, patch }));
+            dispatch(updateBookRequested({ id: bookId, patch }));
+        },
+        [books, dispatch],
+    );
 
-    const addNote = useCallback((bookId: string, title: string) => {
-        const now = new Date().toISOString();
-        const note: Note = {
-            id: crypto.randomUUID(),
-            bookId,
-            title,
-            content: `# ${title}\n\n`,
-            createdAt: now,
-            updatedAt: now,
-        };
-        setNotes((prev) => [note, ...prev]);
-        setActiveNote(note);
-        return note;
-    }, []);
+    const addAttachment = useCallback(
+        (
+            bookId: string,
+            attachmentData: Omit<BookAttachment, "id" | "createdAt">,
+        ) => {
+            const book = books.find((item) => item.id === bookId);
+            if (!book) return;
+            const attachment: BookAttachment = {
+                ...attachmentData,
+                id: crypto.randomUUID(),
+                createdAt: new Date().toISOString(),
+            };
+            const patch: Partial<Book> = {
+                attachments: [...book.attachments, attachment],
+            };
+            dispatch(bookActions.updateBookLocal({ id: bookId, patch }));
+            dispatch(updateBookRequested({ id: bookId, patch }));
+        },
+        [books, dispatch],
+    );
 
-    const updateNote = useCallback((id: string, patch: Partial<Note>) => {
-        setNotes((prev) =>
-            prev.map((n) =>
-                n.id === id
-                    ? { ...n, ...patch, updatedAt: new Date().toISOString() }
-                    : n,
-            ),
-        );
-        setActiveNote((prev) =>
-            prev?.id === id ? { ...prev, ...patch } : prev,
-        );
-    }, []);
+    const removeAttachment = useCallback(
+        (bookId: string, attachmentId: string) => {
+            const book = books.find((item) => item.id === bookId);
+            if (!book) return;
+            const patch: Partial<Book> = {
+                attachments: book.attachments.filter(
+                    (attachment) => attachment.id !== attachmentId,
+                ),
+            };
+            dispatch(bookActions.updateBookLocal({ id: bookId, patch }));
+            dispatch(updateBookRequested({ id: bookId, patch }));
+        },
+        [books, dispatch],
+    );
+
+    const addNote = useCallback(
+        (bookId: string, title: string) => {
+            const now = new Date().toISOString();
+            const note: Note = {
+                id: crypto.randomUUID(),
+                bookId,
+                title,
+                content: `# ${title}\n\n`,
+                createdAt: now,
+                updatedAt: now,
+            };
+            dispatch(bookActions.addNoteLocal(note));
+            dispatch(createNoteRequested(note));
+            return note;
+        },
+        [dispatch],
+    );
+
+    const updateNote = useCallback(
+        (id: string, patch: Partial<Note>) => {
+            dispatch(bookActions.updateNoteLocal({ id, patch }));
+            dispatch(updateNoteRequested({ id, patch }));
+        },
+        [dispatch],
+    );
 
     const deleteNote = useCallback(
         (id: string) => {
-            setNotes((prev) => prev.filter((n) => n.id !== id));
-            if (activeNote?.id === id) setActiveNote(null);
+            dispatch(bookActions.deleteNoteLocal(id));
+            dispatch(deleteNoteRequested(id));
         },
-        [activeNote],
+        [dispatch],
     );
 
     const openNote = useCallback(
         (id: string) => {
-            const note = notes.find((n) => n.id === id);
-            if (note) {
-                setActiveNote(note);
-                setShowNotes(true);
-                const book = books.find((b) => b.id === note.bookId);
-                if (book) {
-                    setActiveBook(book);
-                    setCurrentView("reader");
-                }
-            }
+            const note = notes.find((item) => item.id === id);
+            if (!note) return;
+            dispatch(bookActions.setActiveNoteId(id));
+            dispatch(bookActions.setShowNotes(true));
+            openBook(note.bookId);
         },
-        [notes, books],
+        [dispatch, notes, openBook],
+    );
+
+    const setShowNotes = useCallback(
+        (v: boolean) => dispatch(bookActions.setShowNotes(v)),
+        [dispatch],
+    );
+    const setCommandOpen = useCallback(
+        (v: boolean) => dispatch(bookActions.setCommandOpen(v)),
+        [dispatch],
+    );
+    const setSettingsOpen = useCallback(
+        (v: boolean) => dispatch(bookActions.setSettingsOpen(v)),
+        [dispatch],
+    );
+    const setAddBookOpen = useCallback(
+        (v: boolean) => dispatch(bookActions.setAddBookOpen(v)),
+        [dispatch],
+    );
+    const setShortcutsOpen = useCallback(
+        (v: boolean) => dispatch(bookActions.setShortcutsOpen(v)),
+        [dispatch],
+    );
+    const setAudioUrl = useCallback(
+        (url: string | null) => dispatch(bookActions.setAudioUrl(url)),
+        [dispatch],
+    );
+    const setPlaying = useCallback(
+        (v: boolean) => dispatch(bookActions.setPlaying(v)),
+        [dispatch],
+    );
+
+    const updateSettings = useCallback(
+        (patch: Partial<AppSettings>) => {
+            const nextSettings: AppSettings = { ...state.settings, ...patch };
+            dispatch(bookActions.updateSettingsLocal(patch));
+            dispatch(updateSettingsRequested(nextSettings));
+        },
+        [dispatch, state.settings],
+    );
+
+    const searchLibrary = useCallback(
+        (params: {
+            query: string;
+            filter: "all" | "favorites" | BookFormat;
+            groupFilter: string;
+            page: number;
+            pageSize: number;
+        }) => {
+            dispatch(librarySearchRequested(params));
+        },
+        [dispatch],
+    );
+
+    const searchCommandBooks = useCallback(
+        (query: string, limit = 12) => {
+            dispatch(commandSearchRequested({ query, limit }));
+        },
+        [dispatch],
+    );
+
+    const clearCommandSearch = useCallback(
+        () => dispatch(bookActions.clearCommandSearch()),
+        [dispatch],
     );
 
     const notesForBook = useCallback(
-        (bookId: string) => notes.filter((n) => n.bookId === bookId),
+        (bookId: string) => notes.filter((note) => note.bookId === bookId),
         [notes],
     );
 
     const getLastReadBook = useCallback((): Book | null => {
-        const withDate = books.filter((b) => b.lastOpenedAt);
-        if (!withDate.length) return null;
-        return withDate.reduce((a, b) =>
-            (a.lastOpenedAt! > b.lastOpenedAt! ? a : b)
+        const openedBooks = books.filter((book) => book.lastOpenedAt);
+        if (openedBooks.length === 0) return null;
+        return openedBooks.reduce((latest, current) =>
+            latest.lastOpenedAt! > current.lastOpenedAt! ? latest : current,
         );
     }, [books]);
 
-    const updateSettings = useCallback((patch: Partial<AppSettings>) => {
-        setSettings((prev) => ({ ...prev, ...patch }));
-    }, []);
-
-    return (
-        <BookContext.Provider
-            value={{
-                books,
-                notes,
-                activeBook,
-                activeNote,
-                currentView,
-                showNotes,
-                isCommandOpen,
-                isSettingsOpen,
-                audioUrl,
-                isPlaying,
-                settings,
-                addBook,
-                updateBook,
-                deleteBook,
-                openBook,
-                closeBook,
-                saveProgress,
-                toggleFavorite,
-                addBookmark,
-                removeBookmark,
-                addNote,
-                updateNote,
-                deleteNote,
-                openNote,
-                setView: setCurrentView,
-                setShowNotes,
-                setCommandOpen,
-                setSettingsOpen,
-                setAudioUrl,
-                setPlaying,
-                updateSettings,
-                notesForBook,
-                getLastReadBook,
-            }}
-        >
-            {children}
-        </BookContext.Provider>
-    );
-}
-
-export function useBooks() {
-    const ctx = useContext(BookContext);
-    if (!ctx) throw new Error("useBooks must be used inside BookProvider");
-    return ctx;
+    return {
+        books,
+        notes,
+        activeBook,
+        activeNote,
+        showNotes: state.showNotes,
+        isCommandOpen: state.isCommandOpen,
+        isSettingsOpen: state.isSettingsOpen,
+        isAddBookOpen: state.isAddBookOpen,
+        isShortcutsOpen: state.isShortcutsOpen,
+        audioUrl: state.audioUrl,
+        isPlaying: state.isPlaying,
+        settings: state.settings,
+        library,
+        commandSearch,
+        addBook,
+        updateBook,
+        deleteBook,
+        openBook,
+        closeBook,
+        saveProgress,
+        toggleFavorite,
+        addBookmark,
+        removeBookmark,
+        addAttachment,
+        removeAttachment,
+        addNote,
+        updateNote,
+        deleteNote,
+        openNote,
+        setShowNotes,
+        setCommandOpen,
+        setSettingsOpen,
+        setAddBookOpen,
+        setShortcutsOpen,
+        setAudioUrl,
+        setPlaying,
+        updateSettings,
+        searchLibrary,
+        searchCommandBooks,
+        clearCommandSearch,
+        notesForBook,
+        getLastReadBook,
+    };
 }

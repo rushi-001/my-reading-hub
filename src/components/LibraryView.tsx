@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import {
     BookOpen,
@@ -11,14 +11,12 @@ import {
 } from "lucide-react";
 import { AddBookDrawer } from "@/components/AddBookDrawer";
 import { BookCard } from "@/components/BookCard";
-import { BookStack } from "@/components/BookStack";
 import { EditBookDrawer } from "@/components/EditBookDrawer";
-import { matchesBookQuery, parseBookQuery } from "@/lib/bookSearch";
 import { useBooks } from "@/store/bookStore";
 import type { Book } from "@/types/book";
 import { useNavigate } from "react-router-dom";
 
-const FILTERS: Array<{ label: string; value: string }> = [
+const FILTERS: Array<{ label: string; value: "all" | "favorites" | Book["format"] }> = [
     { label: "All", value: "all" },
     { label: "Favorites", value: "favorites" },
     { label: "PDF", value: "pdf" },
@@ -31,22 +29,52 @@ const FILTERS: Array<{ label: string; value: string }> = [
 export function LibraryView() {
     const {
         books,
+        library,
         settings,
         updateSettings,
         setCommandOpen,
         isAddBookOpen,
         setAddBookOpen,
+        searchLibrary,
     } = useBooks();
     const navigate = useNavigate();
+    const PAGE_SIZE = 24;
 
     // Local UI state for filters/search/edit drawer.
-    const [filter, setFilter] = useState("all");
+    const [filter, setFilter] = useState<"all" | "favorites" | Book["format"]>(
+        "all",
+    );
     const [groupFilter, setGroupFilter] = useState("all");
-    const [search, setSearch] = useState("");
+    const [searchInput, setSearchInput] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [page, setPage] = useState(1);
     const [editOpen, setEditOpen] = useState(false);
     const [editingBook, setEditingBook] = useState<Book | null>(null);
 
-    const parsedQuery = useMemo(() => parseBookQuery(search), [search]);
+    // Debounce typing so library search API is not called on every keystroke.
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setDebouncedSearch(searchInput.trim());
+        }, 250);
+        return () => window.clearTimeout(timeout);
+    }, [searchInput]);
+
+    // Reset to first page whenever filters or search query change.
+    useEffect(() => {
+        setPage(1);
+    }, [debouncedSearch, filter, groupFilter]);
+
+    // Server-driven library search + pagination.
+    useEffect(() => {
+        searchLibrary({
+            query: debouncedSearch,
+            filter,
+            groupFilter,
+            page,
+            pageSize: PAGE_SIZE,
+        });
+    }, [PAGE_SIZE, debouncedSearch, filter, groupFilter, page, searchLibrary]);
+
     const groupOptions = useMemo(
         () =>
             Array.from(
@@ -59,37 +87,50 @@ export function LibraryView() {
         [books],
     );
 
-    const filtered = books.filter((book) => {
-        const matchesFilter =
-            filter === "all"
-                ? true
-                : filter === "favorites"
-                  ? book.isFavorite
-                  : book.format === filter;
-        const matchesGroup =
-            groupFilter === "all" ? true : book.groupId === groupFilter;
-        const matchesSearch = matchesBookQuery(book, parsedQuery);
-        return matchesFilter && matchesGroup && matchesSearch;
-    });
+    // Deduplicate API items before rendering cards.
+    const deduped = useMemo(
+        () =>
+            Array.from(
+                new Map(library.items.map((book) => [book.id, book])).values(),
+            ),
+        [library.items],
+    );
+    const inProgress = deduped.filter((book) => book.progress > 0 && book.progress < 100);
 
-    // Deduplicate books by id before rendering cards/stacks.
-    const deduped = Array.from(new Map(filtered.map((book) => [book.id, book])).values());
-    const inProgress = books.filter((book) => book.progress > 0 && book.progress < 100);
+    // Stack mode now shows section-wise grouped books, including "No Group".
+    const groupedSections = useMemo(() => {
+        if (!settings.stackGroups) return [];
+        const groupMap = new Map<string, Book[]>();
+        const noGroup: Book[] = [];
 
-    const groupedBooks = (() => {
-        if (!settings.stackGroups) return null;
-        const groups: Record<string, Book[]> = {};
-        const ungrouped: Book[] = [];
         for (const book of deduped) {
             if (!book.groupId) {
-                ungrouped.push(book);
+                noGroup.push(book);
                 continue;
             }
-            if (!groups[book.groupId]) groups[book.groupId] = [];
-            groups[book.groupId].push(book);
+            const existing = groupMap.get(book.groupId) ?? [];
+            existing.push(book);
+            groupMap.set(book.groupId, existing);
         }
-        return { groups, ungrouped };
-    })();
+
+        const sections = Array.from(groupMap.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([groupName, sectionBooks]) => ({
+                key: groupName,
+                title: groupName,
+                books: sectionBooks,
+            }));
+
+        if (noGroup.length > 0) {
+            sections.push({
+                key: "__no_group__",
+                title: "No Group",
+                books: noGroup,
+            });
+        }
+
+        return sections;
+    }, [deduped, settings.stackGroups]);
 
     const handleEditClick = (book: Book) => {
         setEditingBook(book);
@@ -103,7 +144,7 @@ export function LibraryView() {
                 <div>
                     <h1 className="text-[12px] font-medium tracking-tight">Library</h1>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {books.length} books - {inProgress.length} in progress
+                        {library.totalItems} books - {inProgress.length} in progress
                     </p>
                 </div>
 
@@ -113,8 +154,8 @@ export function LibraryView() {
                         <Search size={13} className="text-muted-foreground" />
                         <input
                             data-library-search="true"
-                            value={search}
-                            onChange={(event) => setSearch(event.target.value)}
+                            value={searchInput}
+                            onChange={(event) => setSearchInput(event.target.value)}
                             placeholder="Filter library (try #tag or tag:focus)"
                             className="bg-transparent text-[12px] text-foreground placeholder:text-muted-foreground outline-none w-40 font-mono"
                         />
@@ -208,7 +249,11 @@ export function LibraryView() {
             )}
 
             {/* Card/stacks grid */}
-            {deduped.length === 0 ? (
+            {library.isLoading && deduped.length === 0 ? (
+                <div className="py-12 text-[12px] text-muted-foreground">
+                    Loading books...
+                </div>
+            ) : deduped.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
                     <BookOpen size={32} className="text-muted-foreground/30" />
                     <div>
@@ -224,20 +269,29 @@ export function LibraryView() {
                         Add Book
                     </button>
                 </div>
-            ) : settings.stackGroups && groupedBooks ? (
+            ) : settings.stackGroups ? (
                 <AnimatePresence mode="popLayout">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                        {Object.entries(groupedBooks.groups)
-                            .sort(([a], [b]) => a.localeCompare(b))
-                            .map(([groupId, groupBooks]) => (
-                            <BookStack
-                                key={groupId}
-                                books={groupBooks}
-                                maxVisible={settings.stackMaxVisible}
-                            />
-                        ))}
-                        {groupedBooks.ungrouped.map((book) => (
-                            <BookCard key={book.id} book={book} onEdit={handleEditClick} />
+                    <div className="space-y-8">
+                        {groupedSections.map((section) => (
+                            <section key={section.key}>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h2 className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                                        {section.title}
+                                    </h2>
+                                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                                        {section.books.length}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                                    {section.books.map((book) => (
+                                        <BookCard
+                                            key={book.id}
+                                            book={book}
+                                            onEdit={handleEditClick}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
                         ))}
                     </div>
                 </AnimatePresence>
@@ -249,6 +303,33 @@ export function LibraryView() {
                         ))}
                     </div>
                 </AnimatePresence>
+            )}
+
+            {/* Server pagination controls */}
+            {library.totalPages > 1 && (
+                <div className="mt-8 flex items-center justify-center gap-3">
+                    <button
+                        onClick={() => setPage((current) => Math.max(current - 1, 1))}
+                        disabled={!library.hasPrevPage || library.isLoading}
+                        className="border border-muted px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                        Prev
+                    </button>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                        Page {library.page} / {library.totalPages}
+                    </span>
+                    <button
+                        onClick={() =>
+                            setPage((current) =>
+                                Math.min(current + 1, library.totalPages),
+                            )
+                        }
+                        disabled={!library.hasNextPage || library.isLoading}
+                        className="border border-muted px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                        Next
+                    </button>
+                </div>
             )}
 
             {/* Drawers are intentionally not routes. */}

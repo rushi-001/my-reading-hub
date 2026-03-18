@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Command } from "cmdk";
-import Fuse from "fuse.js";
 import {
     ArrowRight,
     BookOpen,
@@ -15,13 +14,8 @@ import {
     Star,
 } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
-import type { AppSettings, Book } from "@/types/book";
+import type { AppSettings } from "@/types/book";
 import { useNavigate } from "react-router-dom";
-import {
-    isBookQueryEmpty,
-    matchesBookQuery,
-    parseBookQuery,
-} from "@/lib/bookSearch";
 
 const FORMAT_ICONS: Record<string, React.ReactNode> = {
     pdf: <FileText size={15} />,
@@ -51,6 +45,9 @@ export function CommandPalette() {
         setCommandOpen,
         openBook,
         getLastReadBook,
+        commandSearch,
+        searchCommandBooks,
+        clearCommandSearch,
         settings,
         setSettingsOpen,
         setAddBookOpen,
@@ -59,34 +56,37 @@ export function CommandPalette() {
 
     const [query, setQuery] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
-
-    const parsedQuery = useMemo(() => parseBookQuery(query), [query]);
-    const queryIsEmpty = isBookQueryEmpty(parsedQuery);
-
-    const filteredBooks = useMemo(
-        () => books.filter((book) => matchesBookQuery(book, parsedQuery)),
-        [books, parsedQuery],
+    const queryIsEmpty = query.trim().length === 0;
+    const rankedBooks = useMemo(
+        () => (queryIsEmpty ? books.slice(0, 8) : commandSearch.results),
+        [books, commandSearch.results, queryIsEmpty],
     );
-
-    // Fuzzy-rank by plain text tokens only after tag/group filtering is applied.
-    const rankedBooks = useMemo(() => {
-        if (queryIsEmpty) return books.slice(0, 8);
-        if (parsedQuery.textTokens.length === 0) return filteredBooks;
-
-        const textQuery = parsedQuery.textTokens.join(" ");
-        const fuse = new Fuse(filteredBooks, {
-            keys: ["title", "author", "tags", "description", "groupId"],
-            threshold: 0.35,
-        });
-        const scored = fuse.search(textQuery).map((result) => result.item);
-        return scored.length > 0 ? scored : filteredBooks;
-    }, [books, filteredBooks, parsedQuery.textTokens, queryIsEmpty]);
 
     useEffect(() => {
         if (!isCommandOpen) return;
         setQuery("");
+        clearCommandSearch();
         setTimeout(() => inputRef.current?.focus(), 50);
-    }, [isCommandOpen]);
+    }, [clearCommandSearch, isCommandOpen]);
+
+    // Backend-driven command search with small debounce.
+    useEffect(() => {
+        if (!isCommandOpen) return;
+        if (queryIsEmpty) {
+            clearCommandSearch();
+            return;
+        }
+        const timeout = window.setTimeout(() => {
+            searchCommandBooks(query.trim(), 20);
+        }, 220);
+        return () => window.clearTimeout(timeout);
+    }, [
+        clearCommandSearch,
+        isCommandOpen,
+        query,
+        queryIsEmpty,
+        searchCommandBooks,
+    ]);
 
     const close = () => setCommandOpen(false);
 
@@ -299,9 +299,17 @@ export function CommandPalette() {
                                     )}
 
                                     {rankedBooks.length === 0 && !queryIsEmpty && (
-                                        <Command.Empty className="py-8 text-center text-[12px] text-muted-foreground">
-                                            No books found for "{query}"
-                                        </Command.Empty>
+                                        <>
+                                            {commandSearch.isLoading ? (
+                                                <Command.Empty className="py-8 text-center text-[12px] text-muted-foreground">
+                                                    Searching...
+                                                </Command.Empty>
+                                            ) : (
+                                                <Command.Empty className="py-8 text-center text-[12px] text-muted-foreground">
+                                                    No books found for "{query}"
+                                                </Command.Empty>
+                                            )}
+                                        </>
                                     )}
                                 </Command.List>
 
@@ -325,7 +333,9 @@ export function CommandPalette() {
                                         close
                                     </span>
                                     <span className="ml-auto tabular-nums opacity-60">
-                                        {rankedBooks.length} books
+                                        {queryIsEmpty
+                                            ? `${rankedBooks.length} books`
+                                            : `${commandSearch.totalItems} matches`}
                                     </span>
                                 </div>
                             </Command>
