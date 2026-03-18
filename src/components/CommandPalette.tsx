@@ -128,7 +128,8 @@ export function CommandPalette() {
               </div>
 
               <Command.List className="max-h-[400px] overflow-y-auto p-1">
-                {/* Quick Navigation — always visible */}
+                {/* Quick Navigation — always visible, even while searching */}
+                {(!query || query.length < 20) && (
                 <Command.Group
                   heading={
                     <span className="px-3 py-1.5 text-[10px] tracking-widest text-muted-foreground uppercase block">
