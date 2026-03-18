@@ -59,7 +59,7 @@ function loadSettings(): AppSettings {
         const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") as Partial<AppSettings> & {
             commandPalettePosition?: string;
         };
-        const legacy = stored.commandPalettePosition;
+        const legacy = stored.commandPalettePosition as string | undefined;
         let normalized = defaults.commandPalettePosition;
 
         if (legacy === "top") normalized = "top-center";
