@@ -1,14 +1,5 @@
 export type BookFormat = "pdf" | "epub" | "audio" | "video" | "podcast" | "url";
 
-export interface BookAttachment {
-    id: string;
-    name: string;
-    mimeType: string;
-    size: number;
-    dataUrl: string; // Stored as data URL so attachments survive reloads.
-    createdAt: string;
-}
-
 export interface Book {
     id: string;
     title: string;
@@ -27,7 +18,6 @@ export interface Book {
     isFavorite: boolean;
     readingDates: string[]; // ISO date strings (YYYY-MM-DD) when user read this
     bookmarks: Bookmark[]; // word/line bookmarks
-    attachments: BookAttachment[];
     createdAt: string; // ISO
     updatedAt: string;
     lastOpenedAt: string | null;
@@ -67,7 +57,6 @@ export interface AppSettings {
     stackMaxVisible: number; // 2-5
     autoScrollSpeed: number; // 0 = off, 1-5
     sidebarVisible: boolean;
-    showCalendarHeatmap: boolean;
 }
 
 export type AppView = "library" | "reader" | "notes" | "calendar";

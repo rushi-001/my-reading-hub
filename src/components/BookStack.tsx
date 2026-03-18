@@ -1,31 +1,25 @@
 import { motion } from "framer-motion";
-import { Layers } from "lucide-react";
+import { BookOpen, Layers } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
 import type { Book } from "@/types/book";
-import { useNavigate } from "react-router-dom";
 
 interface Props {
     books: Book[];
     maxVisible: number;
+    onEdit: (book: Book) => void;
 }
 
-export function BookStack({ books, maxVisible }: Props) {
+export function BookStack({ books, maxVisible, onEdit }: Props) {
     const { openBook } = useBooks();
-    const navigate = useNavigate();
     const visible = books.slice(0, Math.min(maxVisible, 5));
     const topBook = visible[0];
     const count = books.length;
-
-    const handleOpen = () => {
-        openBook(topBook.id);
-        navigate(`/reader/${topBook.id}`);
-    };
 
     return (
         <div
             className="relative cursor-pointer group"
             style={{ paddingBottom: `${(visible.length - 1) * 6}px`, paddingRight: `${(visible.length - 1) * 6}px` }}
-            onClick={handleOpen}
+            onClick={() => openBook(topBook.id)}
         >
             {/* Stack layers (back to front) */}
             {visible.slice(1).reverse().map((book, i) => {

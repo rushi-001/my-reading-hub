@@ -90,12 +90,8 @@ export function EditBookDrawer({ open, onClose, book }: Props) {
             return;
         }
 
-        // Validation logic (same as add)
-        if (!isAudioFormat && !fileUrl) {
-            setError("Please select a file");
-            return;
-        }
-        if (isAudioFormat && !audioUrl.trim()) {
+        // For audio formats, URL is required only if there wasn't one already
+        if (isAudioFormat && !audioUrl.trim() && !book.audioUrl) {
             setError("Please provide a URL");
             return;
         }
