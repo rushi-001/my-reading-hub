@@ -15,7 +15,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
-import type { Book } from "@/types/book";
+import type { AppSettings, Book } from "@/types/book";
 
 const FORMAT_ICONS: Record<string, React.ReactNode> = {
   pdf:     <FileText size={15} />,
@@ -24,6 +24,18 @@ const FORMAT_ICONS: Record<string, React.ReactNode> = {
   video:   <Play size={15} />,
   podcast: <Headphones size={15} />,
   url:     <BookOpen size={15} />,
+};
+
+const PALETTE_ANCHOR_CLASS: Record<AppSettings["commandPalettePosition"], string> = {
+  "top-left": "items-start justify-start sm:pt-8",
+  "top-center": "items-start justify-center sm:pt-8",
+  "top-right": "items-start justify-end sm:pt-8",
+  "center-left": "items-center justify-start",
+  "center-center": "items-center justify-center",
+  "center-right": "items-center justify-end",
+  "bottom-left": "items-end justify-start sm:pb-8",
+  "bottom-center": "items-end justify-center sm:pb-8",
+  "bottom-right": "items-end justify-end sm:pb-8",
 };
 
 export function CommandPalette() {
@@ -66,10 +78,10 @@ export function CommandPalette() {
   };
 
   const lastRead = getLastReadBook();
-
-  const positionClass = settings.commandPalettePosition === "center"
-    ? "top-1/2 -translate-y-1/2"
-    : "top-[15vh]";
+  const anchorClass =
+    PALETTE_ANCHOR_CLASS[settings.commandPalettePosition] ??
+    PALETTE_ANCHOR_CLASS["top-center"];
+  const enterOffsetY = settings.commandPalettePosition.startsWith("bottom") ? 8 : -8;
 
   return (
     <AnimatePresence>
@@ -87,18 +99,19 @@ export function CommandPalette() {
           />
 
           {/* Palette */}
-          <motion.div
-            key="palette"
-            initial={{ opacity: 0, scale: 0.97, y: -8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: -8 }}
-            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className={`fixed left-1/2 z-50 -translate-x-1/2 w-[640px] max-w-[95vw] ${positionClass}`}
-          >
-            <Command
-              className="border border-muted bg-background overflow-hidden"
-              shouldFilter={false}
+          <div className={`fixed inset-0 z-50 flex p-4 pointer-events-none sm:p-6 ${anchorClass}`}>
+            <motion.div
+              key="palette"
+              initial={{ opacity: 0, scale: 0.97, y: enterOffsetY }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97, y: enterOffsetY }}
+              transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+              className="w-[640px] max-w-[95vw] pointer-events-auto"
             >
+              <Command
+                className="border border-muted bg-background overflow-hidden"
+                shouldFilter={false}
+              >
               {/* Input */}
               <div className="flex items-center border-b border-muted px-4 gap-3">
                 <Search size={15} className="text-muted-foreground shrink-0" />
@@ -229,8 +242,9 @@ export function CommandPalette() {
                   {searchResults.length} books
                 </span>
               </div>
-            </Command>
-          </motion.div>
+              </Command>
+            </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>

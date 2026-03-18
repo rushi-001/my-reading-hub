@@ -25,21 +25,51 @@ export function BookReaderView() {
     }
   };
 
-  // Auto-scroll logic
+  const clearAutoScrollTimer = () => {
+    if (scrollTimer.current) {
+      clearInterval(scrollTimer.current);
+      scrollTimer.current = null;
+    }
+  };
+
+  const getScrollTarget = () => {
+    if (!scrollRef.current) return null;
+    const pdfScrollEl = scrollRef.current.querySelector<HTMLElement>(
+      ".rpv-core__inner-pages, .rpv-core__inner-page-container--single",
+    );
+    return pdfScrollEl ?? scrollRef.current;
+  };
+
+  // Auto-scroll logic (works for both regular overflow and PDF viewer inner scroller)
   useEffect(() => {
     const speed = settings.autoScrollSpeed;
-    if (autoScroll && speed > 0 && scrollRef.current) {
+    if (autoScroll && speed > 0) {
       const px = speed * 0.4;
       scrollTimer.current = setInterval(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop += px;
+        const target = getScrollTarget();
+        if (!target) return;
+
+        const maxTop = Math.max(0, target.scrollHeight - target.clientHeight);
+        const nextTop = Math.min(maxTop, target.scrollTop + px);
+        target.scrollTop = nextTop;
+
+        if (nextTop >= maxTop) {
+          setAutoScroll(false);
+          clearAutoScrollTimer();
         }
       }, 16);
     } else {
-      if (scrollTimer.current) clearInterval(scrollTimer.current);
+      clearAutoScrollTimer();
     }
-    return () => { if (scrollTimer.current) clearInterval(scrollTimer.current); };
-  }, [autoScroll, settings.autoScrollSpeed]);
+    return clearAutoScrollTimer;
+  }, [autoScroll, settings.autoScrollSpeed, showNotes, activeBook?.id]);
+
+  // If speed is turned off in settings while scrolling, keep UI state in sync
+  useEffect(() => {
+    if (settings.autoScrollSpeed === 0 && autoScroll) {
+      setAutoScroll(false);
+    }
+  }, [settings.autoScrollSpeed, autoScroll]);
 
   
 

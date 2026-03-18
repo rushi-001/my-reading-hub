@@ -43,7 +43,16 @@ export interface Note {
 
 export interface AppSettings {
     showIcons: boolean; // command palette icons
-    commandPalettePosition: "top" | "center";
+    commandPalettePosition:
+        | "top-left"
+        | "top-center"
+        | "top-right"
+        | "center-left"
+        | "center-center"
+        | "center-right"
+        | "bottom-left"
+        | "bottom-center"
+        | "bottom-right";
     stackGroups: boolean; // show books as stacked groups
     stackMaxVisible: number; // 2-5
     autoScrollSpeed: number; // 0 = off, 1-5

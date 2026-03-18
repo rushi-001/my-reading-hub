@@ -3,11 +3,26 @@ import {
   X,
   Eye,
   EyeOff,
-  AlignCenter,
-  ArrowUpToLine,
   Settings,
 } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
+import type { AppSettings } from "@/types/book";
+
+const COMMAND_PALETTE_POSITION_OPTIONS: Array<{
+  value: AppSettings["commandPalettePosition"];
+  label: string;
+  short: string;
+}> = [
+  { value: "top-left", label: "Top Left", short: "TL" },
+  { value: "top-center", label: "Top Center", short: "TC" },
+  { value: "top-right", label: "Top Right", short: "TR" },
+  { value: "center-left", label: "Center Left", short: "CL" },
+  { value: "center-center", label: "Center", short: "C" },
+  { value: "center-right", label: "Center Right", short: "CR" },
+  { value: "bottom-left", label: "Bottom Left", short: "BL" },
+  { value: "bottom-center", label: "Bottom Center", short: "BC" },
+  { value: "bottom-right", label: "Bottom Right", short: "BR" },
+];
 
 export function SettingsPanel() {
   const { isSettingsOpen, setSettingsOpen, settings, updateSettings } = useBooks();
@@ -61,21 +76,19 @@ export function SettingsPanel() {
                 </Row>
                 <Row
                   label="Position"
-                  description="Where the palette appears on screen"
+                  description="Pick where Cmd+K opens on screen"
                 >
-                  <div className="flex gap-1">
-                    <PillBtn
-                      active={settings.commandPalettePosition === "top"}
-                      onClick={() => updateSettings({ commandPalettePosition: "top" })}
-                      icon={<ArrowUpToLine size={12} />}
-                      label="Top"
-                    />
-                    <PillBtn
-                      active={settings.commandPalettePosition === "center"}
-                      onClick={() => updateSettings({ commandPalettePosition: "center" })}
-                      icon={<AlignCenter size={12} />}
-                      label="Center"
-                    />
+                  <div className="grid grid-cols-3 gap-1 w-[168px]">
+                    {COMMAND_PALETTE_POSITION_OPTIONS.map((option) => (
+                      <PillBtn
+                        key={option.value}
+                        active={settings.commandPalettePosition === option.value}
+                        onClick={() => updateSettings({ commandPalettePosition: option.value })}
+                        label={option.short}
+                        title={option.label}
+                        className="justify-center px-2"
+                      />
+                    ))}
                   </div>
                 </Row>
               </Section>
@@ -209,20 +222,25 @@ function PillBtn({
   onClick,
   label,
   icon,
+  title,
+  className,
 }: {
   active: boolean;
   onClick: () => void;
   label: string;
   icon?: React.ReactNode;
+  title?: string;
+  className?: string;
 }) {
   return (
     <button
       onClick={onClick}
+      title={title}
       className={`flex items-center gap-1 px-2 py-1 text-[11px] border transition-colors ${
         active
           ? "border-terminal text-terminal"
           : "border-muted text-muted-foreground hover:border-muted-foreground"
-      }`}
+      } ${className ?? ""}`}
     >
       {icon}{label}
     </button>

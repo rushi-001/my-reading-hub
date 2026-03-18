@@ -10,6 +10,17 @@ import type { Book, Note, AppView, AppSettings, Bookmark } from "@/types/book";
 const BOOKS_KEY = "secondbrain_books";
 const NOTES_KEY = "secondbrain_notes";
 const SETTINGS_KEY = "secondbrain_settings";
+const COMMAND_PALETTE_POSITIONS = new Set([
+    "top-left",
+    "top-center",
+    "top-right",
+    "center-left",
+    "center-center",
+    "center-right",
+    "bottom-left",
+    "bottom-center",
+    "bottom-right",
+]);
 
 function loadBooks(): Book[] {
     try {
@@ -38,14 +49,30 @@ function loadNotes(): Note[] {
 function loadSettings(): AppSettings {
     const defaults: AppSettings = {
         showIcons: true,
-        commandPalettePosition: "top",
+        commandPalettePosition: "top-center",
         stackGroups: false,
         stackMaxVisible: 3,
         autoScrollSpeed: 0,
         sidebarVisible: true,
     };
     try {
-        return { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") };
+        const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") as Partial<AppSettings> & {
+            commandPalettePosition?: string;
+        };
+        const legacy = stored.commandPalettePosition;
+        let normalized = defaults.commandPalettePosition;
+
+        if (legacy === "top") normalized = "top-center";
+        else if (legacy === "center") normalized = "center-center";
+        else if (legacy && COMMAND_PALETTE_POSITIONS.has(legacy)) {
+            normalized = legacy as AppSettings["commandPalettePosition"];
+        }
+
+        return {
+            ...defaults,
+            ...stored,
+            commandPalettePosition: normalized,
+        };
     } catch {
         return defaults;
     }
