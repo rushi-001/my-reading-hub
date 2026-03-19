@@ -25,6 +25,8 @@ function isTypingElement(target: EventTarget | null) {
     );
 }
 
+// AppShell is the main layout component that contains the command palette,
+// settings panel, and keyboard shortcuts dialog.
 function AppShell() {
     const {
         settings,
@@ -83,26 +85,38 @@ function AppShell() {
             }
 
             // Focus library search.
-            if (!typing && !event.ctrlKey && !event.metaKey && !event.altKey && event.key === "/") {
+            if (
+                !typing &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.altKey &&
+                event.key === "/"
+            ) {
                 event.preventDefault();
                 if (!onLibraryPage) {
                     navigate("/library");
                     setTimeout(() => {
                         document
-                            .querySelector<HTMLInputElement>("[data-library-search='true']")
+                            .querySelector<HTMLInputElement>(
+                                "[data-library-search='true']",
+                            )
                             ?.focus();
                     }, 0);
                 } else {
                     document
-                        .querySelector<HTMLInputElement>("[data-library-search='true']")
+                        .querySelector<HTMLInputElement>(
+                            "[data-library-search='true']",
+                        )
                         ?.focus();
                 }
                 return;
             }
 
             // Show keyboard help with both ? and Ctrl/Cmd + /.
-            const isQuestionKey = event.key === "?" || (event.shiftKey && event.key === "/");
-            const isCtrlSlash = (event.ctrlKey || event.metaKey) && event.key === "/";
+            const isQuestionKey =
+                event.key === "?" || (event.shiftKey && event.key === "/");
+            const isCtrlSlash =
+                (event.ctrlKey || event.metaKey) && event.key === "/";
             if (!typing && (isQuestionKey || isCtrlSlash)) {
                 event.preventDefault();
                 setShortcutsOpen(!isShortcutsOpen);
