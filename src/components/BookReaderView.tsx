@@ -30,15 +30,6 @@ import { useBooks } from "@/store/bookStore";
 import { ProgressRing, StarRating } from "@/components/ui/BookUI";
 import type { BookAttachment } from "@/types/book";
 
-function fileToDataUrl(file: File) {
-    return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result ?? ""));
-        reader.onerror = () => reject(new Error("Failed to read attachment"));
-        reader.readAsDataURL(file);
-    });
-}
-
 function formatAttachmentSize(bytes: number) {
     if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
     if (bytes < 1024) return `${bytes} B`;
@@ -64,7 +55,7 @@ function AttachmentZoomPreview({ attachment }: { attachment: BookAttachment }) {
     if (mime.startsWith("image/")) {
         return (
             <img
-                src={attachment.dataUrl}
+                src={attachment.url}
                 alt={attachment.name}
                 draggable={false}
                 className="block max-w-none h-auto bg-black/20 select-none"
@@ -75,7 +66,7 @@ function AttachmentZoomPreview({ attachment }: { attachment: BookAttachment }) {
     if (mime.startsWith("audio/")) {
         return (
             <div className="w-[640px] h-[120px] flex items-center justify-center px-3">
-                <audio controls src={attachment.dataUrl} className="w-full" />
+                <audio controls src={attachment.url} className="w-full" />
             </div>
         );
     }
@@ -84,7 +75,7 @@ function AttachmentZoomPreview({ attachment }: { attachment: BookAttachment }) {
         return (
             <video
                 controls
-                src={attachment.dataUrl}
+                src={attachment.url}
                 className="block max-w-none bg-black/20"
             />
         );
@@ -98,7 +89,7 @@ function AttachmentZoomPreview({ attachment }: { attachment: BookAttachment }) {
     ) {
         return (
             <iframe
-                src={attachment.dataUrl}
+                src={attachment.url}
                 title={attachment.name}
                 className="block border-0 bg-background w-[960px] h-[1200px]"
             />
@@ -273,26 +264,25 @@ export function BookReaderView() {
         setShowBookmarks(true);
     };
 
-    const handleAttachmentFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const handleAttachmentFile = (event: ChangeEvent<HTMLInputElement>) => {
         if (!activeBook) return;
         const file = event.target.files?.[0];
         if (!file) return;
         setAttachmentError("");
 
-        try {
-            const dataUrl = await fileToDataUrl(file);
-            addAttachment(activeBook.id, {
+        const attachmentPreviewUrl = URL.createObjectURL(file);
+        addAttachment(
+            activeBook.id,
+            {
                 name: file.name,
                 mimeType: file.type || "application/octet-stream",
                 size: file.size,
-                dataUrl,
-            });
-            setShowAttachments(true);
-        } catch {
-            setAttachmentError("Could not add this attachment.");
-        } finally {
-            event.target.value = "";
-        }
+                url: attachmentPreviewUrl,
+            },
+            file,
+        );
+        setShowAttachments(true);
+        event.target.value = "";
     };
 
     const openAttachmentPopup = (attachment: BookAttachment) => {

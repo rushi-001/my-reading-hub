@@ -9,18 +9,23 @@ import {
 import {
     createBookApi,
     createNoteApi,
+    deleteBookAttachmentApi,
     deleteBookApi,
     deleteNoteApi,
+    fetchBookByIdApi,
     fetchBooksApi,
     fetchNotesApi,
     fetchSettingsApi,
     searchBooksApi,
+    uploadBookAttachmentApi,
     updateBookApi,
     updateNoteApi,
     updateSettingsApi,
 } from "@/store/api";
+import type { Book } from "@/types/book";
 import { bookActions } from "@/store/bookSlice";
 import {
+    addAttachmentRequested,
     bootstrapRequested,
     commandSearchRequested,
     createBookRequested,
@@ -28,10 +33,40 @@ import {
     deleteBookRequested,
     deleteNoteRequested,
     librarySearchRequested,
+    removeAttachmentRequested,
     updateBookRequested,
     updateNoteRequested,
     updateSettingsRequested,
 } from "@/store/bookSagaActions";
+
+function isCompleteBookPayload(book: unknown): book is Book {
+    if (!book || typeof book !== "object") return false;
+    const candidate = book as Partial<Book>;
+    return (
+        typeof candidate.id === "string" &&
+        typeof candidate.title === "string" &&
+        typeof candidate.author === "string" &&
+        typeof candidate.format === "string" &&
+        Array.isArray(candidate.tags) &&
+        Array.isArray(candidate.readingDates) &&
+        Array.isArray(candidate.bookmarks) &&
+        Array.isArray(candidate.attachments)
+    );
+}
+
+function* revalidateBookWorker(bookId: string) {
+    try {
+        const result: SagaReturnType<typeof fetchBookByIdApi> = yield call(
+            fetchBookByIdApi,
+            bookId,
+        );
+        if (result?.book) {
+            yield put(bookActions.mergeBookFromApi(result.book));
+        }
+    } catch {
+        // Keep optimistic local state when revalidation endpoint is unavailable.
+    }
+}
 
 function* bootstrapWorker() {
     try {
@@ -73,10 +108,26 @@ function* createBookWorker(action: ReturnType<typeof createBookRequested>) {
     try {
         const result: SagaReturnType<typeof createBookApi> = yield call(
             createBookApi,
-            action.payload,
+            action.payload.book,
+            action.payload.uploads,
         );
-        if (result?.book) {
+
+        if (isCompleteBookPayload(result?.book)) {
             yield put(bookActions.mergeBookFromApi(result.book));
+            return;
+        }
+
+        const hasFileUploads = Boolean(
+            action.payload.uploads?.coverFile || action.payload.uploads?.contentFile,
+        );
+
+        // Only revalidate with GET for file-related mutations.
+        if (hasFileUploads) {
+            if (result?.book?.id) {
+                yield call(revalidateBookWorker, result.book.id);
+                return;
+            }
+            yield call(revalidateBookWorker, action.payload.book.id);
         }
     } catch (error) {
         yield put(
@@ -93,14 +144,72 @@ function* updateBookWorker(action: ReturnType<typeof updateBookRequested>) {
             updateBookApi,
             action.payload.id,
             action.payload.patch,
+            action.payload.uploads,
         );
-        if (result?.book) {
+
+        if (isCompleteBookPayload(result?.book)) {
             yield put(bookActions.mergeBookFromApi(result.book));
+            return;
+        }
+
+        const hasFileUploads = Boolean(
+            action.payload.uploads?.coverFile || action.payload.uploads?.contentFile,
+        );
+
+        // Text/metadata updates rely on optimistic local state and avoid heavy GET.
+        if (hasFileUploads) {
+            yield call(revalidateBookWorker, action.payload.id);
         }
     } catch (error) {
         yield put(
             bookActions.setApiError(
                 error instanceof Error ? error.message : "Update book API failed",
+            ),
+        );
+    }
+}
+
+function* addAttachmentWorker(
+    action: ReturnType<typeof addAttachmentRequested>,
+) {
+    try {
+        const result: SagaReturnType<typeof uploadBookAttachmentApi> = yield call(
+            uploadBookAttachmentApi,
+            action.payload.bookId,
+            action.payload.file,
+        );
+        if (isCompleteBookPayload(result?.book)) {
+            yield put(bookActions.mergeBookFromApi(result.book));
+            return;
+        }
+        yield call(revalidateBookWorker, action.payload.bookId);
+    } catch (error) {
+        yield put(
+            bookActions.setApiError(
+                error instanceof Error ? error.message : "Attachment upload failed",
+            ),
+        );
+    }
+}
+
+function* removeAttachmentWorker(
+    action: ReturnType<typeof removeAttachmentRequested>,
+) {
+    try {
+        const result: SagaReturnType<typeof deleteBookAttachmentApi> = yield call(
+            deleteBookAttachmentApi,
+            action.payload.bookId,
+            action.payload.attachmentId,
+        );
+        if (isCompleteBookPayload(result?.book)) {
+            yield put(bookActions.mergeBookFromApi(result.book));
+            return;
+        }
+        yield call(revalidateBookWorker, action.payload.bookId);
+    } catch (error) {
+        yield put(
+            bookActions.setApiError(
+                error instanceof Error ? error.message : "Attachment delete failed",
             ),
         );
     }
@@ -293,6 +402,8 @@ export function* bookRootSaga() {
         takeEvery(createBookRequested.type, createBookWorker),
         takeEvery(updateBookRequested.type, updateBookWorker),
         takeEvery(deleteBookRequested.type, deleteBookWorker),
+        takeEvery(addAttachmentRequested.type, addAttachmentWorker),
+        takeEvery(removeAttachmentRequested.type, removeAttachmentWorker),
         takeEvery(createNoteRequested.type, createNoteWorker),
         takeEvery(updateNoteRequested.type, updateNoteWorker),
         takeEvery(deleteNoteRequested.type, deleteNoteWorker),

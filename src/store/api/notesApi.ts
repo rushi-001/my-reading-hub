@@ -14,6 +14,11 @@ export interface DeleteNoteResponse {
     deletedId?: string;
 }
 
+// Expected request:
+// - method: GET
+// - path: /api/notes
+// - body: none
+//
 // Expected response example:
 // {
 //   "notes": [
@@ -32,6 +37,19 @@ export async function fetchNotesApi(): Promise<FetchNotesResponse> {
     return data;
 }
 
+// Expected request:
+// - method: POST
+// - path: /api/notes
+// - body (JSON):
+//   {
+//     "id": "note-uuid",
+//     "bookId": "book-uuid",
+//     "title": "Chapter 2 summary",
+//     "content": "# Chapter 2 summary\\n\\n- Main idea",
+//     "createdAt": "2026-03-18T10:20:00.000Z",
+//     "updatedAt": "2026-03-18T10:20:00.000Z"
+//   }
+//
 // Expected response example:
 // {
 //   "note": {
@@ -48,6 +66,16 @@ export async function createNoteApi(note: Note): Promise<UpsertNoteResponse> {
     return data;
 }
 
+// Expected request:
+// - method: PATCH
+// - path: /api/notes/:id
+// - path param: id (string, required)
+// - body (JSON partial Note):
+//   {
+//     "title": "Chapter 2 summary",
+//     "content": "# Chapter 2 summary\\n\\n- Main idea\\n- Updated insight"
+//   }
+//
 // Expected response example:
 // {
 //   "note": {
@@ -70,6 +98,12 @@ export async function updateNoteApi(
     return data;
 }
 
+// Expected request:
+// - method: DELETE
+// - path: /api/notes/:id
+// - path param: id (string, required)
+// - body: none
+//
 // Expected response example:
 // {
 //   "success": true,

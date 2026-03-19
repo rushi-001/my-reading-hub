@@ -36,8 +36,10 @@ export function AddBookDrawer({ open, onClose }: Props) {
   const [author, setAuthor]     = useState("");
   const [desc, setDesc]         = useState("");
   const [cover, setCover]       = useState<string | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
   const [format, setFormat]     = useState<BookFormat>("pdf");
   const [fileUrl, setFileUrl]   = useState<string | null>(null);
+  const [contentFile, setContentFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
   const [audioUrl, setAudioUrl] = useState("");
   const [rating, setRating]     = useState(0);
@@ -47,7 +49,9 @@ export function AddBookDrawer({ open, onClose }: Props) {
 
   const reset = () => {
     setTitle(""); setAuthor(""); setDesc(""); setCover(null);
+    setCoverFile(null);
     setFormat("pdf"); setFileUrl(null); setFileName("");
+    setContentFile(null);
     setAudioUrl(""); setRating(0); setTags(""); setGroup(""); setError("");
   };
 
@@ -55,6 +59,7 @@ export function AddBookDrawer({ open, onClose }: Props) {
     const f = e.target.files?.[0];
     if (!f) return;
     setFileName(f.name);
+    setContentFile(f);
     setFileUrl(URL.createObjectURL(f));
   };
 
@@ -84,6 +89,9 @@ export function AddBookDrawer({ open, onClose }: Props) {
       readingDates: [],
       bookmarks: [],
       attachments: [],
+    }, {
+      coverFile,
+      contentFile: isAudioFormat ? null : contentFile,
     });
     reset();
     onClose();
@@ -127,7 +135,7 @@ export function AddBookDrawer({ open, onClose }: Props) {
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
               {/* Cover + basic */}
               <div className="flex gap-4">
-                <CoverUpload value={cover} onChange={setCover} />
+                <CoverUpload value={cover} onChange={setCover} onFileSelect={setCoverFile} />
                 <div className="flex-1 space-y-3">
                   <Field label="Title *">
                     <input

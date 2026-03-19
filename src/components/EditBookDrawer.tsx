@@ -40,8 +40,10 @@ export function EditBookDrawer({ open, onClose, book }: Props) {
     const [author, setAuthor] = useState("");
     const [desc, setDesc] = useState("");
     const [cover, setCover] = useState<string | null>(null);
+    const [coverFile, setCoverFile] = useState<File | null>(null);
     const [format, setFormat] = useState<BookFormat>("pdf");
     const [fileUrl, setFileUrl] = useState<string | null>(null);
+    const [contentFile, setContentFile] = useState<File | null>(null);
     const [fileName, setFileName] = useState("");
     const [audioUrl, setAudioUrl] = useState("");
     const [rating, setRating] = useState(0);
@@ -55,8 +57,10 @@ export function EditBookDrawer({ open, onClose, book }: Props) {
         setAuthor("");
         setDesc("");
         setCover(null);
+        setCoverFile(null);
         setFormat("pdf");
         setFileUrl(null);
+        setContentFile(null);
         setFileName("");
         setAudioUrl("");
         setRating(0);
@@ -72,8 +76,10 @@ export function EditBookDrawer({ open, onClose, book }: Props) {
             setAuthor(book.author);
             setDesc(book.description || "");
             setCover(book.cover);
+            setCoverFile(null);
             setFormat(book.format);
             setFileUrl(book.fileUrl);
+            setContentFile(null);
             setFileName(book.fileUrl ? "Current file" : "");
             setAudioUrl(book.audioUrl || "");
             setRating(book.rating);
@@ -89,6 +95,7 @@ export function EditBookDrawer({ open, onClose, book }: Props) {
         const f = e.target.files?.[0];
         if (!f) return;
         setFileName(f.name);
+        setContentFile(f);
         setFileUrl(URL.createObjectURL(f));
     };
 
@@ -127,6 +134,9 @@ export function EditBookDrawer({ open, onClose, book }: Props) {
                 .map((t) => t.trim())
                 .filter(Boolean),
             groupId: normalizeBookGroup(group),
+        }, {
+            coverFile,
+            contentFile: isAudioFormat ? null : contentFile,
         });
 
         onClose();
@@ -172,6 +182,7 @@ export function EditBookDrawer({ open, onClose, book }: Props) {
                                 <CoverUpload
                                     value={cover}
                                     onChange={setCover}
+                                    onFileSelect={setCoverFile}
                                 />
                                 <div className="flex-1 space-y-3">
                                     <Field label="Title *">

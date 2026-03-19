@@ -26,6 +26,8 @@ const FILTERS: Array<{ label: string; value: "all" | "favorites" | Book["format"
     { label: "Podcast", value: "podcast" },
 ];
 
+const PAGE_SIZE_OPTIONS = [12, 24, 48, 96] as const;
+
 export function LibraryView() {
     const {
         books,
@@ -38,7 +40,6 @@ export function LibraryView() {
         searchLibrary,
     } = useBooks();
     const navigate = useNavigate();
-    const PAGE_SIZE = 24;
 
     // Local UI state for filters/search/edit drawer.
     const [filter, setFilter] = useState<"all" | "favorites" | Book["format"]>(
@@ -48,6 +49,7 @@ export function LibraryView() {
     const [searchInput, setSearchInput] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(24);
     const [editOpen, setEditOpen] = useState(false);
     const [editingBook, setEditingBook] = useState<Book | null>(null);
 
@@ -62,7 +64,14 @@ export function LibraryView() {
     // Reset to first page whenever filters or search query change.
     useEffect(() => {
         setPage(1);
-    }, [debouncedSearch, filter, groupFilter]);
+    }, [debouncedSearch, filter, groupFilter, pageSize]);
+
+    // Keep local page in sync with server-corrected page values.
+    useEffect(() => {
+        if (library.page !== page) {
+            setPage(library.page);
+        }
+    }, [library.page, page]);
 
     // Server-driven library search + pagination.
     useEffect(() => {
@@ -71,9 +80,9 @@ export function LibraryView() {
             filter,
             groupFilter,
             page,
-            pageSize: PAGE_SIZE,
+            pageSize,
         });
-    }, [PAGE_SIZE, debouncedSearch, filter, groupFilter, page, searchLibrary]);
+    }, [debouncedSearch, filter, groupFilter, page, pageSize, searchLibrary]);
 
     const groupOptions = useMemo(
         () =>
@@ -96,6 +105,33 @@ export function LibraryView() {
         [library.items],
     );
     const inProgress = deduped.filter((book) => book.progress > 0 && book.progress < 100);
+    const totalPages = Math.max(1, library.totalPages);
+    const currentPage = Math.min(Math.max(1, library.page), totalPages);
+    const itemStart =
+        library.totalItems === 0 ? 0 : (currentPage - 1) * library.pageSize + 1;
+    const itemEnd = Math.min(currentPage * library.pageSize, library.totalItems);
+
+    const pageButtons = useMemo(() => {
+        if (totalPages <= 1) return [1];
+        const pages: number[] = [1];
+        const start = Math.max(2, currentPage - 1);
+        const end = Math.min(totalPages - 1, currentPage + 1);
+
+        if (start > 2) {
+            pages.push(-1);
+        }
+
+        for (let i = start; i <= end; i += 1) {
+            pages.push(i);
+        }
+
+        if (end < totalPages - 1) {
+            pages.push(-2);
+        }
+
+        pages.push(totalPages);
+        return pages;
+    }, [currentPage, totalPages]);
 
     // Stack mode now shows section-wise grouped books, including "No Group".
     const groupedSections = useMemo(() => {
@@ -306,29 +342,71 @@ export function LibraryView() {
             )}
 
             {/* Server pagination controls */}
-            {library.totalPages > 1 && (
-                <div className="mt-8 flex items-center justify-center gap-3">
-                    <button
-                        onClick={() => setPage((current) => Math.max(current - 1, 1))}
-                        disabled={!library.hasPrevPage || library.isLoading}
-                        className="border border-muted px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                        Prev
-                    </button>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
-                        Page {library.page} / {library.totalPages}
-                    </span>
-                    <button
-                        onClick={() =>
-                            setPage((current) =>
-                                Math.min(current + 1, library.totalPages),
-                            )
-                        }
-                        disabled={!library.hasNextPage || library.isLoading}
-                        className="border border-muted px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                        Next
-                    </button>
+            {library.totalItems > 0 && (
+                <div className="mt-8 border-t border-muted pt-4 flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground">
+                            Rows per page
+                        </span>
+                        <select
+                            value={pageSize}
+                            onChange={(event) => setPageSize(Number(event.target.value))}
+                            className="bg-surface-1 border border-muted px-2 py-1.5 text-[11px] text-foreground outline-none focus:border-muted-foreground"
+                        >
+                            {PAGE_SIZE_OPTIONS.map((option) => (
+                                <option key={option} value={option}>
+                                    {option}
+                                </option>
+                            ))}
+                        </select>
+                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                            {itemStart}-{itemEnd} of {library.totalItems}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            onClick={() => setPage((current) => Math.max(current - 1, 1))}
+                            disabled={!library.hasPrevPage || library.isLoading}
+                            className="border border-muted px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Prev
+                        </button>
+
+                        {pageButtons.map((pageButton, index) =>
+                            pageButton < 0 ? (
+                                <span
+                                    key={`ellipsis-${index}`}
+                                    className="px-2 text-[11px] text-muted-foreground"
+                                >
+                                    ...
+                                </span>
+                            ) : (
+                                <button
+                                    key={pageButton}
+                                    onClick={() => setPage(pageButton)}
+                                    disabled={library.isLoading}
+                                    className={`border px-2.5 py-1.5 text-[11px] tabular-nums transition-colors ${
+                                        pageButton === currentPage
+                                            ? "border-terminal text-terminal"
+                                            : "border-muted text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                                    } disabled:opacity-40 disabled:cursor-not-allowed`}
+                                >
+                                    {pageButton}
+                                </button>
+                            ),
+                        )}
+
+                        <button
+                            onClick={() =>
+                                setPage((current) => Math.min(current + 1, totalPages))
+                            }
+                            disabled={!library.hasNextPage || library.isLoading}
+                            className="border border-muted px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-muted-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Next
+                        </button>
+                    </div>
                 </div>
             )}
 

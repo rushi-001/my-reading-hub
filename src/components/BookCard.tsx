@@ -89,13 +89,6 @@ export function BookCard({
                     <span className="ml-0.5">{FORMAT_LABEL[book.format]}</span>
                 </div>
 
-                {/* Favorite indicator on cover */}
-                {book.isFavorite && (
-                    <div className="absolute top-2 right-2">
-                        <Heart size={12} className="fill-terminal text-terminal" />
-                    </div>
-                )}
-
                 {/* Hover overlay */}
                 {hover && (
                     <motion.div
@@ -138,7 +131,11 @@ export function BookCard({
                             e.stopPropagation();
                             toggleFavorite(book.id);
                         }}
-                        title={book.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                        title={
+                            book.isFavorite
+                                ? "Remove from favorites"
+                                : "Add to favorites"
+                        }
                     >
                         <Heart
                             size={12}

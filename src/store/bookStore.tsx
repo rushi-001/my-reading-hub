@@ -5,18 +5,21 @@ import type {
     Book,
     BookAttachment,
     BookFormat,
+    BookUploadFiles,
     Bookmark,
     Note,
 } from "@/types/book";
 import type { AppDispatch, RootState } from "@/store/appStore";
 import { bookActions } from "@/store/bookSlice";
 import {
+    addAttachmentRequested,
     commandSearchRequested,
     createBookRequested,
     createNoteRequested,
     deleteBookRequested,
     deleteNoteRequested,
     librarySearchRequested,
+    removeAttachmentRequested,
     updateBookRequested,
     updateNoteRequested,
     updateSettingsRequested,
@@ -57,8 +60,15 @@ export interface BookStore {
         isLoading: boolean;
     };
     // Actions
-    addBook: (book: Omit<Book, "id" | "createdAt" | "updatedAt">) => Book;
-    updateBook: (id: string, patch: Partial<Book>) => void;
+    addBook: (
+        book: Omit<Book, "id" | "createdAt" | "updatedAt">,
+        uploads?: BookUploadFiles,
+    ) => Book;
+    updateBook: (
+        id: string,
+        patch: Partial<Book>,
+        uploads?: BookUploadFiles,
+    ) => void;
     deleteBook: (id: string) => void;
     openBook: (id: string) => void;
     closeBook: () => void;
@@ -69,6 +79,7 @@ export interface BookStore {
     addAttachment: (
         bookId: string,
         attachment: Omit<BookAttachment, "id" | "createdAt">,
+        file?: File,
     ) => void;
     removeAttachment: (bookId: string, attachmentId: string) => void;
     addNote: (bookId: string, title: string) => Note;
@@ -115,7 +126,10 @@ export function useBooks(): BookStore {
     );
 
     const addBook = useCallback(
-        (data: Omit<Book, "id" | "createdAt" | "updatedAt">) => {
+        (
+            data: Omit<Book, "id" | "createdAt" | "updatedAt">,
+            uploads?: BookUploadFiles,
+        ) => {
             const now = new Date().toISOString();
             const book: Book = {
                 ...data,
@@ -126,16 +140,27 @@ export function useBooks(): BookStore {
             };
 
             dispatch(bookActions.addBookLocal(book));
-            dispatch(createBookRequested(book));
+            dispatch(
+                createBookRequested({
+                    book,
+                    uploads,
+                }),
+            );
             return book;
         },
         [dispatch],
     );
 
     const updateBook = useCallback(
-        (id: string, patch: Partial<Book>) => {
+        (id: string, patch: Partial<Book>, uploads?: BookUploadFiles) => {
             dispatch(bookActions.updateBookLocal({ id, patch }));
-            dispatch(updateBookRequested({ id, patch }));
+            dispatch(
+                updateBookRequested({
+                    id,
+                    patch,
+                    uploads,
+                }),
+            );
         },
         [dispatch],
     );
@@ -241,6 +266,7 @@ export function useBooks(): BookStore {
         (
             bookId: string,
             attachmentData: Omit<BookAttachment, "id" | "createdAt">,
+            file?: File,
         ) => {
             const book = books.find((item) => item.id === bookId);
             if (!book) return;
@@ -253,7 +279,15 @@ export function useBooks(): BookStore {
                 attachments: [...book.attachments, attachment],
             };
             dispatch(bookActions.updateBookLocal({ id: bookId, patch }));
-            dispatch(updateBookRequested({ id: bookId, patch }));
+
+            if (file) {
+                dispatch(
+                    addAttachmentRequested({
+                        bookId,
+                        file,
+                    }),
+                );
+            }
         },
         [books, dispatch],
     );
@@ -262,13 +296,27 @@ export function useBooks(): BookStore {
         (bookId: string, attachmentId: string) => {
             const book = books.find((item) => item.id === bookId);
             if (!book) return;
+            const targetAttachment = book.attachments.find(
+                (attachment) => attachment.id === attachmentId,
+            );
             const patch: Partial<Book> = {
                 attachments: book.attachments.filter(
                     (attachment) => attachment.id !== attachmentId,
                 ),
             };
             dispatch(bookActions.updateBookLocal({ id: bookId, patch }));
-            dispatch(updateBookRequested({ id: bookId, patch }));
+
+            // Newly added attachments can exist as local blob URLs until API merge.
+            if (targetAttachment?.url.startsWith("blob:")) {
+                return;
+            }
+
+            dispatch(
+                removeAttachmentRequested({
+                    bookId,
+                    attachmentId,
+                }),
+            );
         },
         [books, dispatch],
     );

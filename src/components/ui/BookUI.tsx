@@ -73,15 +73,18 @@ export function StarRating({
 export function CoverUpload({
   value,
   onChange,
+  onFileSelect,
 }: {
   value: string | null;
   onChange: (url: string) => void;
+  onFileSelect?: (file: File | null) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    onFileSelect?.(file);
     const reader = new FileReader();
     reader.onload = () => onChange(reader.result as string);
     reader.readAsDataURL(file);

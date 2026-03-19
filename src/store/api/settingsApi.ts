@@ -5,6 +5,11 @@ export interface SettingsResponse {
     settings: AppSettings;
 }
 
+// Expected request:
+// - method: GET
+// - path: /api/settings
+// - body: none
+//
 // Expected response example:
 // {
 //   "settings": {
@@ -22,6 +27,20 @@ export async function fetchSettingsApi(): Promise<SettingsResponse> {
     return data;
 }
 
+// Expected request:
+// - method: PUT
+// - path: /api/settings
+// - body (JSON):
+//   {
+//     "showIcons": true,
+//     "commandPalettePosition": "center-center",
+//     "stackGroups": false,
+//     "stackMaxVisible": 3,
+//     "autoScrollSpeed": 0,
+//     "sidebarVisible": true,
+//     "showCalendarHeatmap": true
+//   }
+//
 // Expected response example:
 // {
 //   "settings": {

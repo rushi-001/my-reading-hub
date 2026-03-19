@@ -1,12 +1,17 @@
-export type BookFormat = "pdf" | "epub" | "audio" | "video" | "podcast" | "url";
+﻿export type BookFormat = "pdf" | "epub" | "audio" | "video" | "podcast" | "url";
 
 export interface BookAttachment {
     id: string;
     name: string;
     mimeType: string;
     size: number;
-    dataUrl: string; // Stored as data URL so attachments survive reloads.
+    url: string; // Backend-served URL for attachment preview/download.
     createdAt: string;
+}
+
+export interface BookUploadFiles {
+    coverFile?: File | null;
+    contentFile?: File | null;
 }
 
 export interface Book {
@@ -14,12 +19,12 @@ export interface Book {
     title: string;
     author: string;
     description: string;
-    cover: string | null; // base64 data URL or remote URL
+    cover: string | null; // backend-served URL
     format: BookFormat;
-    fileUrl: string | null; // for PDF / EPUB — object URL or remote
+    fileUrl: string | null; // backend-served URL for PDF / EPUB
     audioUrl: string | null; // YouTube / audio / video / podcast URL
-    rating: number; // 0–5
-    progress: number; // 0–100
+    rating: number; // 0-5
+    progress: number; // 0-100
     currentPage: number;
     totalPages: number;
     tags: string[];
