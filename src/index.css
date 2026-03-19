@@ -105,9 +105,25 @@
   }
 }
 
-/* Invert PDF canvas to fit dark shell styling. */
-.pdf-dark-canvas canvas {
-  filter: invert(100%) contrast(90%) !important;
+/* PDF display modes and brightness controls. */
+.pdf-canvas-theme canvas {
+  filter: var(--pdf-canvas-filter, none) !important;
+}
+
+.pdf-mode-original {
+  --pdf-canvas-filter: brightness(var(--pdf-brightness, 100%));
+}
+
+.pdf-mode-dark {
+  --pdf-canvas-filter: invert(100%) contrast(90%) brightness(var(--pdf-brightness, 100%));
+}
+
+.pdf-mode-sepia {
+  --pdf-canvas-filter: sepia(82%) saturate(70%) contrast(92%) brightness(var(--pdf-brightness, 100%));
+}
+
+.pdf-mode-sepia-invert {
+  --pdf-canvas-filter: invert(100%) sepia(58%) saturate(78%) hue-rotate(-18deg) contrast(88%) brightness(var(--pdf-brightness, 100%));
 }
 
 /* Long-form reading text style. */

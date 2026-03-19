@@ -39,8 +39,8 @@ export default function CalendarPage() {
     };
 
     return (
-        <div className="h-full flex-1 min-h-0 overflow-y-auto p-8">
-            <div className="flex items-center gap-3 mb-8">
+        <div className="h-full flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 lg:p-8">
+            <div className="flex items-center gap-3 mb-6 sm:mb-8 flex-wrap">
                 <button
                     onClick={() => navigate("/library")}
                     className="text-muted-foreground hover:text-foreground transition-colors text-[12px] font-mono"

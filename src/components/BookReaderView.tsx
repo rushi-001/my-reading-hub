@@ -28,6 +28,7 @@ import { NoteEditor } from "@/components/NoteEditor";
 import { PDFReader } from "@/components/PDFReader";
 import { useBooks } from "@/store/bookStore";
 import { ProgressRing, StarRating } from "@/components/ui/BookUI";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { BookAttachment } from "@/types/book";
 
 function formatAttachmentSize(bytes: number) {
@@ -119,6 +120,7 @@ export function BookReaderView() {
         settings,
     } = useBooks();
     const navigate = useNavigate();
+    const isMobile = useIsMobile();
 
     const [showBookmarks, setShowBookmarks] = useState(false);
     const [showAttachments, setShowAttachments] = useState(false);
@@ -359,7 +361,7 @@ export function BookReaderView() {
     return (
         <div className="flex flex-col h-full">
             {/* Reader toolbar */}
-            <div className="flex items-center gap-3 px-4 py-2 border-b border-muted bg-surface-1 shrink-0 flex-wrap">
+            <div className="flex items-center gap-2 px-3 sm:px-4 py-2 border-b border-muted bg-surface-1 shrink-0 flex-nowrap overflow-x-auto [&>*]:shrink-0">
                 <button
                     onClick={handleBack}
                     className="text-muted-foreground hover:text-foreground transition-colors"
@@ -382,7 +384,7 @@ export function BookReaderView() {
                     </div>
                 </div>
 
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-[140px]">
                     <span className="text-[12px] font-medium truncate block">{activeBook.title}</span>
                     <span className="text-[11px] text-muted-foreground truncate block">
                         {activeBook.author}
@@ -695,10 +697,16 @@ export function BookReaderView() {
             )}
 
             {/* Main reading area */}
-            <div className="flex flex-1 min-h-0">
+            <div className={`flex flex-1 min-h-0 ${isMobile ? "flex-col" : ""}`}>
                 <div
                     ref={scrollRef}
-                    className={`${showNotes ? "w-1/2" : "flex-1"} overflow-auto`}
+                    className={`${
+                        showNotes
+                            ? isMobile
+                                ? "hidden"
+                                : "w-1/2"
+                            : "flex-1"
+                    } overflow-auto`}
                     style={{ minHeight: 0 }}
                 >
                     {isAudio && !activeBook.fileUrl ? (
@@ -756,7 +764,11 @@ export function BookReaderView() {
                 </div>
 
                 {showNotes && (
-                    <div className="w-1/2 min-h-0 overflow-hidden">
+                    <div
+                        className={`${
+                            isMobile ? "w-full flex-1" : "w-1/2"
+                        } min-h-0 overflow-hidden`}
+                    >
                         <NoteEditor bookId={activeBook.id} />
                     </div>
                 )}

@@ -174,9 +174,9 @@ export function LibraryView() {
     };
 
     return (
-        <div className="flex-1 min-h-0 overflow-y-auto p-8">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 lg:p-8">
             {/* Top bar with search/actions */}
-            <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+            <div className="flex items-center justify-between mb-6 gap-3 sm:gap-4 flex-wrap">
                 <div>
                     <h1 className="text-[12px] font-medium tracking-tight">Library</h1>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -186,14 +186,14 @@ export function LibraryView() {
 
                 <div className="flex items-center gap-2 flex-wrap">
                     {/* Search input targeted by "/" keyboard shortcut */}
-                    <div className="flex items-center gap-2 border border-muted bg-surface-1 px-3 py-2">
+                    <div className="flex items-center gap-2 border border-muted bg-surface-1 px-3 py-2 w-full sm:w-auto">
                         <Search size={13} className="text-muted-foreground" />
                         <input
                             data-library-search="true"
                             value={searchInput}
                             onChange={(event) => setSearchInput(event.target.value)}
                             placeholder="Filter library (try #tag or tag:focus)"
-                            className="bg-transparent text-[12px] text-foreground placeholder:text-muted-foreground outline-none w-40 font-mono"
+                            className="bg-transparent text-[12px] text-foreground placeholder:text-muted-foreground outline-none w-full sm:w-40 font-mono"
                         />
                     </div>
 
