@@ -34,6 +34,12 @@ export function SettingsPanel() {
         updateSettings,
     } = useBooks();
 
+    const setAutoScrollSpeed = (value: number) => {
+        if (!Number.isFinite(value)) return;
+        const clamped = Math.max(0, Math.min(5, Number(value.toFixed(1))));
+        updateSettings({ autoScrollSpeed: clamped });
+    };
+
     return (
         <AnimatePresence>
             {isSettingsOpen && (
@@ -192,19 +198,26 @@ export function SettingsPanel() {
                                     label="Auto-Scroll Speed"
                                     description="0 = off, higher = faster"
                                 >
-                                    <div className="flex gap-1">
-                                        {[0, 1, 2, 3, 4, 5].map((value) => (
-                                            <PillBtn
-                                                key={value}
-                                                active={settings.autoScrollSpeed === value}
-                                                onClick={() =>
-                                                    updateSettings({
-                                                        autoScrollSpeed: value,
-                                                    })
-                                                }
-                                                label={value === 0 ? "Off" : String(value)}
-                                            />
-                                        ))}
+                                    <div className="w-[220px] space-y-1">
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={5}
+                                            step={0.1}
+                                            value={settings.autoScrollSpeed}
+                                            onChange={(event) =>
+                                                setAutoScrollSpeed(
+                                                    Number.parseFloat(event.target.value),
+                                                )
+                                            }
+                                            className="w-full accent-[hsl(var(--terminal-green))]"
+                                            aria-label="Auto-scroll speed"
+                                        />
+                                        <p className="text-[10px] text-muted-foreground font-mono text-right">
+                                            {settings.autoScrollSpeed === 0
+                                                ? "Off"
+                                                : settings.autoScrollSpeed.toFixed(1)}
+                                        </p>
                                     </div>
                                 </Row>
                             </Section>

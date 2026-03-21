@@ -4,7 +4,6 @@ import { X, Upload, Link2, FileText, Headphones } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
 import { CoverUpload, StarRating } from "@/components/ui/BookUI";
 import type { BookFormat } from "@/types/book";
-import { useNavigate } from "react-router-dom";
 import { normalizeBookGroup } from "@/lib/bookSearch";
 
 interface Props {
@@ -21,8 +20,7 @@ const FORMATS: { value: BookFormat; label: string; icon: React.ReactNode }[] = [
 ];
 
 export function AddBookDrawer({ open, onClose }: Props) {
-  const { addBook, openBook, books } = useBooks();
-  const navigate = useNavigate();
+  const { addBook, books } = useBooks();
   const fileRef = useRef<HTMLInputElement>(null);
   const groupOptions = Array.from(
     new Set(
@@ -70,7 +68,7 @@ export function AddBookDrawer({ open, onClose }: Props) {
     if (!isAudioFormat && !fileUrl) { setError("Please select a file"); return; }
     if (isAudioFormat && !audioUrl.trim()) { setError("Please provide a URL"); return; }
 
-    const book = addBook({
+    addBook({
       title: title.trim(),
       author: author.trim() || "Unknown Author",
       description: desc.trim(),
@@ -95,8 +93,6 @@ export function AddBookDrawer({ open, onClose }: Props) {
     });
     reset();
     onClose();
-    openBook(book.id);
-    navigate(`/reader/${book.id}`);
   };
 
   return (

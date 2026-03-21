@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
 import type { Book } from "@/types/book";
+import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
 import { useNavigate } from "react-router-dom";
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -42,6 +43,7 @@ export function BookCard({
     const { openBook, deleteBook, toggleFavorite } = useBooks();
     const navigate = useNavigate();
     const [hover, setHover] = useState(false);
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
     const initials = book.title
         .split(" ")
@@ -51,6 +53,7 @@ export function BookCard({
         .toUpperCase();
 
     const handleOpen = () => {
+        if (confirmDeleteOpen) return;
         openBook(book.id);
         navigate(`/reader/${book.id}`);
     };
@@ -175,43 +178,37 @@ export function BookCard({
                 </div>
             </div>
 
-            {/* Card actions — appear on hover */}
-            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                {!book.isFavorite && (
-                    <button
-                        className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onEdit(book);
-                        }}
-                        title="Edit book"
-                    >
-                        <Edit3 size={13} />
-                    </button>
-                )}
-                {book.isFavorite && (
-                    <button
-                        className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onEdit(book);
-                        }}
-                        title="Edit book"
-                    >
-                        <Edit3 size={13} />
-                    </button>
-                )}
+            {/* Card actions: always visible on mobile, hover reveal on larger screens */}
+            <div className="absolute top-2 right-2 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <button
+                    className="bg-background border border-muted p-1 text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onEdit(book);
+                    }}
+                    title="Edit book"
+                >
+                    <Edit3 size={13} />
+                </button>
                 <button
                     className="bg-background border border-muted p-1 text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
                     onClick={(e) => {
                         e.stopPropagation();
-                        deleteBook(book.id);
+                        setConfirmDeleteOpen(true);
                     }}
                     title="Delete book"
                 >
                     <Trash2 size={13} />
                 </button>
             </div>
+
+            <ConfirmActionDialog
+                open={confirmDeleteOpen}
+                onOpenChange={setConfirmDeleteOpen}
+                title="Delete this book?"
+                description={`This will permanently remove "${book.title}" from your library.`}
+                onConfirm={() => deleteBook(book.id)}
+            />
         </motion.div>
     );
 }

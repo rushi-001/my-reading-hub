@@ -1,33 +1,43 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorView } from "@codemirror/view";
 import { Plus, Trash2 } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
+import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
 
-const obsidianTheme = EditorView.theme({
-  "&": { background: "hsl(0 0% 0%)", color: "hsl(0 0% 100%)" },
-  ".cm-content": { caretColor: "hsl(142 100% 50%)" },
-  ".cm-cursor": { borderLeftColor: "hsl(142 100% 50%)" },
-  ".cm-selectionBackground": { background: "hsl(142 100% 50% / 0.15)" },
-  ".cm-line": { padding: "0 12px" },
-  ".cm-gutters": { background: "hsl(0 0% 0%)", border: "none", color: "hsl(0 0% 30%)" },
-  ".cm-activeLineGutter": { background: "hsl(0 0% 4%)" },
-  ".cm-activeLine": { background: "hsl(0 0% 4%)" },
-}, { dark: true });
+const obsidianTheme = EditorView.theme(
+  {
+    "&": { background: "hsl(0 0% 0%)", color: "hsl(0 0% 100%)" },
+    ".cm-content": { caretColor: "hsl(142 100% 50%)" },
+    ".cm-cursor": { borderLeftColor: "hsl(142 100% 50%)" },
+    ".cm-selectionBackground": { background: "hsl(142 100% 50% / 0.15)" },
+    ".cm-line": { padding: "0 12px" },
+    ".cm-gutters": { background: "hsl(0 0% 0%)", border: "none", color: "hsl(0 0% 30%)" },
+    ".cm-activeLineGutter": { background: "hsl(0 0% 4%)" },
+    ".cm-activeLine": { background: "hsl(0 0% 4%)" },
+  },
+  { dark: true },
+);
 
-interface Props { bookId: string; }
+interface Props {
+  bookId: string;
+}
 
 export function NoteEditor({ bookId }: Props) {
   const { notesForBook, activeNote, addNote, updateNote, deleteNote, openNote } = useBooks();
   const notes = notesForBook(bookId);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [noteToDelete, setNoteToDelete] = useState<{ id: string; title: string } | null>(null);
 
-  const handleChange = useCallback((value: string) => {
-    if (!activeNote) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => updateNote(activeNote.id, { content: value }), 500);
-  }, [activeNote, updateNote]);
+  const handleChange = useCallback(
+    (value: string) => {
+      if (!activeNote) return;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => updateNote(activeNote.id, { content: value }), 500);
+    },
+    [activeNote, updateNote],
+  );
 
   return (
     <div className="flex flex-col h-full border-l border-muted bg-background">
@@ -50,13 +60,18 @@ export function NoteEditor({ bookId }: Props) {
               key={n.id}
               onClick={() => openNote(n.id)}
               className={`group flex items-center gap-2 px-4 py-2 cursor-pointer text-xs border-b border-muted/40 transition-colors ${
-                activeNote?.id === n.id ? "text-foreground bg-surface-1" : "text-muted-foreground hover:text-foreground hover:bg-surface-1"
+                activeNote?.id === n.id
+                  ? "text-foreground bg-surface-1"
+                  : "text-muted-foreground hover:text-foreground hover:bg-surface-1"
               }`}
             >
               <span className="flex-1 truncate">{n.title}</span>
               <button
                 className="opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => { e.stopPropagation(); deleteNote(n.id); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNoteToDelete({ id: n.id, title: n.title });
+                }}
               >
                 <Trash2 size={9} />
               </button>
@@ -91,10 +106,28 @@ export function NoteEditor({ bookId }: Props) {
       {activeNote && (
         <div className="px-4 py-2 border-t border-muted shrink-0">
           <span className="text-[9px] text-muted-foreground/60 font-mono">
-            auto-save · {new Date(activeNote.updatedAt).toLocaleTimeString()}
+            auto-save - {new Date(activeNote.updatedAt).toLocaleTimeString()}
           </span>
         </div>
       )}
+
+      <ConfirmActionDialog
+        open={Boolean(noteToDelete)}
+        onOpenChange={(open) => {
+          if (!open) setNoteToDelete(null);
+        }}
+        title="Delete this note?"
+        description={
+          noteToDelete
+            ? `This will permanently remove "${noteToDelete.title}".`
+            : "This action cannot be undone."
+        }
+        onConfirm={() => {
+          if (!noteToDelete) return;
+          deleteNote(noteToDelete.id);
+          setNoteToDelete(null);
+        }}
+      />
     </div>
   );
 }

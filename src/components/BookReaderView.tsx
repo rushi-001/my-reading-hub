@@ -7,11 +7,8 @@ import {
 } from "react";
 import {
     ArrowLeft,
-    Bookmark,
     BookmarkCheck,
     BookOpen,
-    ChevronDown,
-    ChevronUp,
     FileText,
     Headphones,
     Minus,
@@ -26,6 +23,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { NoteEditor } from "@/components/NoteEditor";
 import { PDFReader } from "@/components/PDFReader";
+import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
 import { useBooks } from "@/store/bookStore";
 import { ProgressRing, StarRating } from "@/components/ui/BookUI";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -49,6 +47,18 @@ function isZoomableAttachment(attachment: BookAttachment) {
         mime.includes("xml")
     );
 }
+
+type PendingRemoval =
+    | {
+          type: "bookmark";
+          id: string;
+          label: string;
+      }
+    | {
+          type: "attachment";
+          id: string;
+          label: string;
+      };
 
 function AttachmentZoomPreview({ attachment }: { attachment: BookAttachment }) {
     const mime = attachment.mimeType.toLowerCase();
@@ -131,10 +141,12 @@ export function BookReaderView() {
         useState<BookAttachment | null>(null);
     const [attachmentZoom, setAttachmentZoom] = useState(1);
     const [isPreviewDragging, setIsPreviewDragging] = useState(false);
+    const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null);
 
     const attachmentInputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const scrollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+    const autoScrollPixelRemainderRef = useRef(0);
     const previewViewportRef = useRef<HTMLDivElement>(null);
     const previewDragStateRef = useRef<{
         startX: number;
@@ -151,6 +163,7 @@ export function BookReaderView() {
             clearInterval(scrollTimer.current);
             scrollTimer.current = null;
         }
+        autoScrollPixelRemainderRef.current = 0;
     };
 
     const getScrollTarget = () => {
@@ -165,13 +178,26 @@ export function BookReaderView() {
     useEffect(() => {
         const speed = settings.autoScrollSpeed;
         if (autoScroll && speed > 0) {
+            autoScrollPixelRemainderRef.current = 0;
             const pxPerTick = speed * 0.4;
             scrollTimer.current = setInterval(() => {
                 const target = getScrollTarget();
                 if (!target) return;
 
                 const maxTop = Math.max(0, target.scrollHeight - target.clientHeight);
-                const nextTop = Math.min(maxTop, target.scrollTop + pxPerTick);
+                if (target.scrollTop >= maxTop) {
+                    setAutoScroll(false);
+                    clearAutoScrollTimer();
+                    return;
+                }
+
+                // Browsers can round scrollTop to integers; accumulate sub-pixel speed.
+                autoScrollPixelRemainderRef.current += pxPerTick;
+                const stepPx = Math.floor(autoScrollPixelRemainderRef.current);
+                if (stepPx <= 0) return;
+
+                autoScrollPixelRemainderRef.current -= stepPx;
+                const nextTop = Math.min(maxTop, target.scrollTop + stepPx);
                 target.scrollTop = nextTop;
 
                 if (nextTop >= maxTop) {
@@ -240,6 +266,7 @@ export function BookReaderView() {
         setPreviewAttachment(null);
         setAttachmentZoom(1);
         setIsPreviewDragging(false);
+        setPendingRemoval(null);
         previewDragStateRef.current = null;
     }, [activeBook?.id]);
 
@@ -264,6 +291,23 @@ export function BookReaderView() {
             text: `Page ${page}`,
         });
         setShowBookmarks(true);
+    };
+
+    const handleToggleAutoScroll = () => {
+        if (settings.autoScrollSpeed <= 0) return;
+        setAutoScroll((prev) => !prev);
+    };
+
+    const handleConfirmRemoval = () => {
+        if (!activeBook || !pendingRemoval) return;
+
+        if (pendingRemoval.type === "bookmark") {
+            removeBookmark(activeBook.id, pendingRemoval.id);
+        } else {
+            removeAttachment(activeBook.id, pendingRemoval.id);
+        }
+
+        setPendingRemoval(null);
     };
 
     const handleAttachmentFile = (event: ChangeEvent<HTMLInputElement>) => {
@@ -395,29 +439,6 @@ export function BookReaderView() {
                     {activeBook.progress}%
                 </span>
 
-                {settings.autoScrollSpeed > 0 && (
-                    <button
-                        onClick={() => setAutoScroll(!autoScroll)}
-                        className={`flex items-center gap-1 border px-2 py-1 text-[11px] transition-colors ${
-                            autoScroll
-                                ? "border-terminal text-terminal"
-                                : "border-muted text-muted-foreground hover:border-muted-foreground"
-                        }`}
-                        title="Toggle auto-scroll"
-                    >
-                        {autoScroll ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-                        Scroll
-                    </button>
-                )}
-
-                <button
-                    onClick={handleAddBookmark}
-                    className="flex items-center gap-1 border border-muted px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
-                    title="Add bookmark at current page"
-                >
-                    <Bookmark size={12} /> Mark
-                </button>
-
                 {bookmarks.length > 0 && (
                     <button
                         onClick={() => setShowBookmarks(!showBookmarks)}
@@ -496,7 +517,13 @@ export function BookReaderView() {
                                 <span className="font-mono">{bookmark.text}</span>
                             </button>
                             <button
-                                onClick={() => removeBookmark(activeBook.id, bookmark.id)}
+                                onClick={() =>
+                                    setPendingRemoval({
+                                        type: "bookmark",
+                                        id: bookmark.id,
+                                        label: bookmark.text,
+                                    })
+                                }
                                 className="text-muted-foreground/50 hover:text-destructive ml-1"
                                 title="Remove bookmark"
                             >
@@ -545,7 +572,11 @@ export function BookReaderView() {
                                     </button>
                                     <button
                                         onClick={() =>
-                                            removeAttachment(activeBook.id, attachment.id)
+                                            setPendingRemoval({
+                                                type: "attachment",
+                                                id: attachment.id,
+                                                label: attachment.name,
+                                            })
                                         }
                                         className="text-muted-foreground/60 hover:text-destructive shrink-0"
                                         title="Remove attachment"
@@ -752,6 +783,10 @@ export function BookReaderView() {
                             initialPage={Math.max(0, (activeBook.currentPage || 1) - 1)}
                             targetPage={jumpToPage}
                             onJumpHandled={() => setJumpToPage(null)}
+                            autoScrollEnabled={autoScroll}
+                            autoScrollSpeed={settings.autoScrollSpeed}
+                            onToggleAutoScroll={handleToggleAutoScroll}
+                            onAddBookmark={handleAddBookmark}
                         />
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full gap-4 text-center p-8">
@@ -773,6 +808,24 @@ export function BookReaderView() {
                     </div>
                 )}
             </div>
+
+            <ConfirmActionDialog
+                open={Boolean(pendingRemoval)}
+                onOpenChange={(open) => {
+                    if (!open) setPendingRemoval(null);
+                }}
+                title={
+                    pendingRemoval?.type === "bookmark"
+                        ? "Remove this bookmark?"
+                        : "Remove this attachment?"
+                }
+                description={
+                    pendingRemoval
+                        ? `This will permanently remove "${pendingRemoval.label}".`
+                        : "This action cannot be undone."
+                }
+                onConfirm={handleConfirmRemoval}
+            />
         </div>
     );
 }
