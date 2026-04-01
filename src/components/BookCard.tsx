@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
     BookOpen,
@@ -9,6 +9,7 @@ import {
     Edit3,
     Play,
     Heart,
+    LoaderCircle,
 } from "lucide-react";
 import { useBooks } from "@/store/bookStore";
 import type { Book } from "@/types/book";
@@ -44,6 +45,9 @@ export function BookCard({
     const navigate = useNavigate();
     const [hover, setHover] = useState(false);
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+    const [coverStatus, setCoverStatus] = useState<"loading" | "loaded" | "error">(
+        book.cover ? "loading" : "error",
+    );
 
     const initials = book.title
         .split(" ")
@@ -51,6 +55,10 @@ export function BookCard({
         .map((w) => w[0])
         .join("")
         .toUpperCase();
+
+    useEffect(() => {
+        setCoverStatus(book.cover ? "loading" : "error");
+    }, [book.cover]);
 
     const handleOpen = () => {
         if (confirmDeleteOpen) return;
@@ -72,17 +80,33 @@ export function BookCard({
         >
             {/* Cover area */}
             <div className="relative aspect-[2/3] overflow-hidden bg-surface-2">
-                {book.cover ? (
+                {book.cover && (
                     <img
                         src={book.cover}
                         alt={book.title}
-                        className="w-full h-full object-cover"
+                        onLoad={() => setCoverStatus("loaded")}
+                        onError={() => setCoverStatus("error")}
+                        className={`w-full h-full object-cover transition-opacity duration-200 ${
+                            coverStatus === "loaded" ? "opacity-100" : "opacity-0"
+                        }`}
                     />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                        <span className="text-3xl font-mono font-bold text-muted-foreground/30 select-none">
-                            {initials}
-                        </span>
+                )}
+
+                {coverStatus !== "loaded" && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-surface-2">
+                        {book.cover && coverStatus === "loading" ? (
+                            <LoaderCircle
+                                size={28}
+                                className="animate-spin text-muted-foreground/60"
+                            />
+                        ) : (
+                            <div className="flex flex-col items-center gap-2 text-muted-foreground/45">
+                                <FileText size={30} />
+                                <span className="text-[10px] font-mono uppercase tracking-[0.18em]">
+                                    {book.format === "pdf" ? "PDF" : initials}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 )}
 

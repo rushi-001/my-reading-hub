@@ -1,8 +1,6 @@
 import axios from "axios";
 
-const rawApiBaseUrl = (
-    import.meta.env.VITE_API_BASE_URL || "http://localhost:8484"
-).trim();
+const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").trim();
 
 function resolveApiBaseUrl() {
     if (!rawApiBaseUrl) return "";
