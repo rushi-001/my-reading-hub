@@ -17,6 +17,7 @@ import {
     formatSyncTimestamp,
     getLatestSyncTimestamp,
 } from "@/lib/syncStatus";
+import { PDF_THEME_OPTIONS } from "@/lib/pdfTheme";
 import { useBooks } from "@/store/bookStore";
 import type { AppSettings, SyncAction } from "@/types/book";
 
@@ -363,6 +364,27 @@ export function SettingsPanel() {
                             </Section>
 
                             <Section label="Reader">
+                                <Row
+                                    label="PDF Theme"
+                                    description="Default theme used for PDF pages"
+                                >
+                                    <div className="grid w-[220px] grid-cols-2 gap-1">
+                                        {PDF_THEME_OPTIONS.map((option) => (
+                                            <PillBtn
+                                                key={option.value}
+                                                active={settings.pdfTheme === option.value}
+                                                onClick={() =>
+                                                    updateSettings({
+                                                        pdfTheme: option.value,
+                                                    })
+                                                }
+                                                label={option.label}
+                                                className="justify-center px-2"
+                                            />
+                                        ))}
+                                    </div>
+                                </Row>
+
                                 <Row
                                     label="Auto-Scroll Speed"
                                     description="0 = off, higher = faster"

@@ -1,5 +1,6 @@
 export type BookFormat = "pdf" | "epub" | "audio" | "video" | "podcast" | "url";
 export type SyncAction = "push" | "pull";
+export type PdfTheme = "original" | "dark" | "light" | "sepia_invert";
 
 export interface BookAttachment {
     id: string;
@@ -75,6 +76,7 @@ export interface AppSettings {
     sidebarVisible: boolean;
     collapsibleSidebar: boolean;
     showCalendarHeatmap: boolean;
+    pdfTheme: PdfTheme;
 }
 
 export interface AuthSession {

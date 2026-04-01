@@ -8,6 +8,7 @@ import type {
     Note,
     SyncAction,
 } from "@/types/book";
+import { normalizePdfTheme } from "@/lib/pdfTheme";
 
 export const BOOKS_KEY = "secondbrain_books";
 export const NOTES_KEY = "secondbrain_notes";
@@ -37,6 +38,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     sidebarVisible: true,
     collapsibleSidebar: true,
     showCalendarHeatmap: true,
+    pdfTheme: "original",
 };
 
 const SEED_BOOKS: Book[] = [
@@ -149,26 +151,34 @@ function loadNotes(): Note[] {
 }
 
 function loadSettings(): AppSettings {
+    const normalizeCommandPalettePosition = (
+        value: unknown,
+    ): AppSettings["commandPalettePosition"] => {
+        const legacyPosition = String(value ?? "");
+
+        if (legacyPosition === "top") return "top-center";
+        if (legacyPosition === "center") return "center-center";
+        if (COMMAND_PALETTE_POSITIONS.has(legacyPosition)) {
+            return legacyPosition as AppSettings["commandPalettePosition"];
+        }
+
+        return DEFAULT_SETTINGS.commandPalettePosition;
+    };
+
     try {
         const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") as
-            Partial<AppSettings> & { commandPalettePosition?: string };
-        const legacyPosition = String(stored.commandPalettePosition ?? "");
-        let normalizedPosition = DEFAULT_SETTINGS.commandPalettePosition;
-
-        if (legacyPosition === "top") normalizedPosition = "top-center";
-        else if (legacyPosition === "center") normalizedPosition = "center-center";
-        else if (
-            legacyPosition &&
-            COMMAND_PALETTE_POSITIONS.has(legacyPosition)
-        ) {
-            normalizedPosition =
-                legacyPosition as AppSettings["commandPalettePosition"];
-        }
+            Partial<AppSettings> & {
+                commandPalettePosition?: string;
+                pdfTheme?: unknown;
+            };
 
         return {
             ...DEFAULT_SETTINGS,
             ...stored,
-            commandPalettePosition: normalizedPosition,
+            commandPalettePosition: normalizeCommandPalettePosition(
+                stored.commandPalettePosition,
+            ),
+            pdfTheme: normalizePdfTheme(stored.pdfTheme),
         };
     } catch {
         return DEFAULT_SETTINGS;
@@ -414,6 +424,7 @@ export const bookSlice = createSlice({
             state.settings = {
                 ...DEFAULT_SETTINGS,
                 ...action.payload,
+                pdfTheme: normalizePdfTheme(action.payload.pdfTheme),
             };
         },
         mergeBookFromApi(state, action: PayloadAction<Book>) {
@@ -503,7 +514,13 @@ export const bookSlice = createSlice({
             if (state.activeNoteId === id) state.activeNoteId = null;
         },
         updateSettingsLocal(state, action: PayloadAction<Partial<AppSettings>>) {
-            state.settings = { ...state.settings, ...action.payload };
+            state.settings = {
+                ...state.settings,
+                ...action.payload,
+                pdfTheme: normalizePdfTheme(
+                    action.payload.pdfTheme ?? state.settings.pdfTheme,
+                ),
+            };
         },
         setActiveBookId(state, action: PayloadAction<string | null>) {
             state.activeBookId = action.payload;

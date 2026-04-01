@@ -20,7 +20,8 @@ export interface SettingsResponse {
 //     "autoScrollSpeed": 0,
 //     "sidebarVisible": true,
 //     "collapsibleSidebar": true,
-//     "showCalendarHeatmap": true
+//     "showCalendarHeatmap": true,
+//     "pdfTheme": "original"
 //   }
 // }
 export async function fetchSettingsApi(): Promise<SettingsResponse> {
@@ -40,7 +41,8 @@ export async function fetchSettingsApi(): Promise<SettingsResponse> {
 //     "autoScrollSpeed": 0,
 //     "sidebarVisible": true,
 //     "collapsibleSidebar": true,
-//     "showCalendarHeatmap": true
+//     "showCalendarHeatmap": true,
+//     "pdfTheme": "dark"
 //   }
 //
 // Expected response example:
@@ -53,7 +55,8 @@ export async function fetchSettingsApi(): Promise<SettingsResponse> {
 //     "autoScrollSpeed": 0,
 //     "sidebarVisible": true,
 //     "collapsibleSidebar": true,
-//     "showCalendarHeatmap": true
+//     "showCalendarHeatmap": true,
+//     "pdfTheme": "dark"
 //   }
 // }
 export async function updateSettingsApi(

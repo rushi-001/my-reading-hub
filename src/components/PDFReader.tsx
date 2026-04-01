@@ -3,7 +3,9 @@ import { Document as PdfDocument, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { PDF_THEME_OPTIONS } from "@/lib/pdfTheme";
 import { useBooks } from "@/store/bookStore";
+import type { PdfTheme } from "@/types/book";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -24,7 +26,6 @@ type LoadedPdfPage = {
     getViewport: (params: { scale: number }) => { width: number; height: number };
 };
 
-type PdfDisplayMode = "original" | "dark" | "sepia" | "sepia-invert";
 type ZoomPreset = "width" | "page";
 
 interface Props {
@@ -38,13 +39,6 @@ interface Props {
     onToggleAutoScroll?: () => void;
     onAddBookmark?: () => void;
 }
-
-const DISPLAY_MODE_OPTIONS: Array<{ mode: PdfDisplayMode; label: string }> = [
-    { mode: "original", label: "Original" },
-    { mode: "dark", label: "Dark" },
-    { mode: "sepia", label: "Sepia" },
-    { mode: "sepia-invert", label: "Sepia Invert" },
-];
 
 const DEFAULT_PAGE_ASPECT_RATIO = 0.75;
 const MIN_PAGE_WIDTH = 240;
@@ -67,7 +61,7 @@ export function PDFReader({
     onAddBookmark,
 }: Props) {
     const isMobile = useIsMobile();
-    const { saveProgress, books, updateBook } = useBooks();
+    const { saveProgress, books, settings, updateBook, updateSettings } = useBooks();
     const book = books.find((item) => item.id === bookId);
 
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,7 +83,6 @@ export function PDFReader({
     const [pageAspectRatio, setPageAspectRatio] = useState(DEFAULT_PAGE_ASPECT_RATIO);
     const [immersiveMode, setImmersiveMode] = useState(false);
     const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
-    const [displayMode, setDisplayMode] = useState<PdfDisplayMode>("dark");
     const [brightness, setBrightness] = useState(100);
     const [showBrightnessControls, setShowBrightnessControls] = useState(false);
     const [documentError, setDocumentError] = useState<string | null>(null);
@@ -388,13 +381,14 @@ export function PDFReader({
         [executePendingScroll],
     );
 
+    const displayMode = settings.pdfTheme;
     const displayModeClass =
         displayMode === "original"
             ? "pdf-mode-original"
             : displayMode === "dark"
                 ? "pdf-mode-dark"
-                : displayMode === "sepia"
-                    ? "pdf-mode-sepia"
+                : displayMode === "light"
+                    ? "pdf-mode-light"
                     : "pdf-mode-sepia-invert";
     const filterStyle = {
         "--pdf-brightness": `${brightness}%`,
@@ -577,13 +571,15 @@ export function PDFReader({
                                 <select
                                     value={displayMode}
                                     onChange={(event) =>
-                                        setDisplayMode(event.target.value as PdfDisplayMode)
+                                        updateSettings({
+                                            pdfTheme: event.target.value as PdfTheme,
+                                        })
                                     }
                                     className="border border-muted bg-background px-2 py-1 text-[10px] text-foreground outline-none focus:border-terminal"
                                     aria-label="Display mode"
                                 >
-                                    {DISPLAY_MODE_OPTIONS.map((option) => (
-                                        <option key={option.mode} value={option.mode}>
+                                    {PDF_THEME_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
                                             {option.label}
                                         </option>
                                     ))}
