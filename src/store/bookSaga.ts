@@ -4,25 +4,29 @@ import {
     put,
     takeEvery,
     takeLatest,
+    takeLeading,
     type SagaReturnType,
 } from "redux-saga/effects";
+import { isAxiosError } from "axios";
 import {
     createBookApi,
     createNoteApi,
     deleteBookAttachmentApi,
     deleteBookApi,
+    fetchAdminMeApi,
     deleteNoteApi,
     fetchBookByIdApi,
     fetchBooksApi,
     fetchNotesApi,
     fetchSettingsApi,
+    pullLibraryApi,
+    pushLibraryApi,
     searchBooksApi,
     uploadBookAttachmentApi,
     updateBookApi,
     updateNoteApi,
     updateSettingsApi,
 } from "@/store/api";
-import type { Book } from "@/types/book";
 import { bookActions } from "@/store/bookSlice";
 import {
     addAttachmentRequested,
@@ -33,11 +37,14 @@ import {
     deleteBookRequested,
     deleteNoteRequested,
     librarySearchRequested,
+    pullSyncRequested,
+    pushSyncRequested,
     removeAttachmentRequested,
     updateBookRequested,
     updateNoteRequested,
     updateSettingsRequested,
 } from "@/store/bookSagaActions";
+import type { Book, SyncAction } from "@/types/book";
 
 function isCompleteBookPayload(book: unknown): book is Book {
     if (!book || typeof book !== "object") return false;
@@ -68,39 +75,142 @@ function* revalidateBookWorker(bookId: string) {
     }
 }
 
+function* clearUnauthorizedSession() {
+    yield put(bookActions.clearAuthSession());
+    yield put(bookActions.setApiError(null));
+}
+
+function isUnauthorizedError(error: unknown) {
+    return (
+        isAxiosError(error) &&
+        (error.response?.status === 401 || error.response?.status === 403)
+    );
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    return fallback;
+}
+
+function getSyncCompletedAt(
+    result: SagaReturnType<typeof pushLibraryApi> | SagaReturnType<typeof pullLibraryApi>,
+) {
+    return result?.commit?.date ?? result?.snapshot?.generatedAt ?? new Date().toISOString();
+}
+
+function* hydrateLibraryData() {
+    const [bookResult, noteResult, settingsResult]: [
+        SagaReturnType<typeof fetchBooksApi>,
+        SagaReturnType<typeof fetchNotesApi>,
+        SagaReturnType<typeof fetchSettingsApi>,
+    ] = yield all([
+        call(fetchBooksApi),
+        call(fetchNotesApi),
+        call(fetchSettingsApi),
+    ]);
+
+    if (bookResult?.books) {
+        yield put(bookActions.setBooks(bookResult.books));
+    }
+    if (noteResult?.notes) {
+        yield put(bookActions.setNotes(noteResult.notes));
+    }
+    if (settingsResult?.settings) {
+        yield put(bookActions.setSettings(settingsResult.settings));
+    }
+}
+
 function* bootstrapWorker() {
     try {
-        yield put(bookActions.setApiSyncing(true));
+        yield put(bookActions.setApiBootstrapping(true));
+        yield put(bookActions.setAuthChecking(true));
         yield put(bookActions.setApiError(null));
 
-        const [bookResult, noteResult, settingsResult]: [
-            SagaReturnType<typeof fetchBooksApi>,
-            SagaReturnType<typeof fetchNotesApi>,
-            SagaReturnType<typeof fetchSettingsApi>,
-        ] = yield all([
-            call(fetchBooksApi),
-            call(fetchNotesApi),
-            call(fetchSettingsApi),
-        ]);
+        const authResult: SagaReturnType<typeof fetchAdminMeApi> = yield call(
+            fetchAdminMeApi,
+        );
+        if (authResult?.admin) {
+            yield put(bookActions.setAuthSession(authResult.admin));
+        }
 
-        if (bookResult?.books) {
-            yield put(bookActions.setBooks(bookResult.books));
-        }
-        if (noteResult?.notes) {
-            yield put(bookActions.setNotes(noteResult.notes));
-        }
-        if (settingsResult?.settings) {
-            yield put(bookActions.setSettings(settingsResult.settings));
-        }
+        yield* hydrateLibraryData();
     } catch (error) {
-        // Keep local state as source of truth when API is unavailable.
+        if (isUnauthorizedError(error)) {
+            yield* clearUnauthorizedSession();
+        } else {
+            yield put(
+                bookActions.setApiError(
+                    getErrorMessage(error, "Failed to bootstrap API"),
+                ),
+            );
+        }
+    } finally {
+        yield put(bookActions.setAuthChecking(false));
+        yield put(bookActions.setApiBootstrapping(false));
+    }
+}
+
+function* applySyncResponse(
+    action: SyncAction,
+    result: SagaReturnType<typeof pushLibraryApi> | SagaReturnType<typeof pullLibraryApi>,
+) {
+    const completedAt = getSyncCompletedAt(result);
+    if (action === "push") {
+        yield put(bookActions.setLastPushedAt(completedAt));
+        return;
+    }
+
+    yield put(bookActions.setLastPulledAt(completedAt));
+}
+
+function* pushSyncWorker() {
+    try {
+        yield put(bookActions.setApiSyncing(true));
+        yield put(bookActions.setActiveSyncAction("push"));
+        yield put(bookActions.setApiError(null));
+
+        const result: SagaReturnType<typeof pushLibraryApi> = yield call(pushLibraryApi);
+        yield* applySyncResponse("push", result);
+    } catch (error) {
+        if (isUnauthorizedError(error)) {
+            yield* clearUnauthorizedSession();
+            return;
+        }
         yield put(
             bookActions.setApiError(
-                error instanceof Error ? error.message : "Failed to bootstrap API",
+                getErrorMessage(error, "GitHub upload failed"),
             ),
         );
     } finally {
         yield put(bookActions.setApiSyncing(false));
+        yield put(bookActions.setActiveSyncAction(null));
+    }
+}
+
+function* pullSyncWorker() {
+    try {
+        yield put(bookActions.setApiSyncing(true));
+        yield put(bookActions.setActiveSyncAction("pull"));
+        yield put(bookActions.setApiError(null));
+
+        const result: SagaReturnType<typeof pullLibraryApi> = yield call(pullLibraryApi);
+        yield* hydrateLibraryData();
+        yield* applySyncResponse("pull", result);
+    } catch (error) {
+        if (isUnauthorizedError(error)) {
+            yield* clearUnauthorizedSession();
+            return;
+        }
+        yield put(
+            bookActions.setApiError(
+                getErrorMessage(error, "GitHub download failed"),
+            ),
+        );
+    } finally {
+        yield put(bookActions.setApiSyncing(false));
+        yield put(bookActions.setActiveSyncAction(null));
     }
 }
 
@@ -121,7 +231,6 @@ function* createBookWorker(action: ReturnType<typeof createBookRequested>) {
             action.payload.uploads?.coverFile || action.payload.uploads?.contentFile,
         );
 
-        // Only revalidate with GET for file-related mutations.
         if (hasFileUploads) {
             if (result?.book?.id) {
                 yield call(revalidateBookWorker, result.book.id);
@@ -156,7 +265,6 @@ function* updateBookWorker(action: ReturnType<typeof updateBookRequested>) {
             action.payload.uploads?.coverFile || action.payload.uploads?.contentFile,
         );
 
-        // Text/metadata updates rely on optimistic local state and avoid heavy GET.
         if (hasFileUploads) {
             yield call(revalidateBookWorker, action.payload.id);
         }
@@ -397,6 +505,8 @@ function* commandSearchWorker(
 export function* bookRootSaga() {
     yield all([
         takeLatest(bootstrapRequested.type, bootstrapWorker),
+        takeLeading(pushSyncRequested.type, pushSyncWorker),
+        takeLeading(pullSyncRequested.type, pullSyncWorker),
         takeLatest(librarySearchRequested.type, librarySearchWorker),
         takeLatest(commandSearchRequested.type, commandSearchWorker),
         takeEvery(createBookRequested.type, createBookWorker),

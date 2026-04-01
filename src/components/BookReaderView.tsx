@@ -141,7 +141,9 @@ export function BookReaderView() {
         useState<BookAttachment | null>(null);
     const [attachmentZoom, setAttachmentZoom] = useState(1);
     const [isPreviewDragging, setIsPreviewDragging] = useState(false);
-    const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null);
+    const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(
+        null,
+    );
 
     const attachmentInputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -154,7 +156,9 @@ export function BookReaderView() {
         startScrollLeft: number;
         startScrollTop: number;
     } | null>(null);
-    const isAudio = activeBook ? ["audio", "video", "podcast"].includes(activeBook.format) : false;
+    const isAudio = activeBook
+        ? ["audio", "video", "podcast"].includes(activeBook.format)
+        : false;
     const bookmarks = activeBook?.bookmarks || [];
     const attachments = activeBook?.attachments || [];
 
@@ -184,7 +188,10 @@ export function BookReaderView() {
                 const target = getScrollTarget();
                 if (!target) return;
 
-                const maxTop = Math.max(0, target.scrollHeight - target.clientHeight);
+                const maxTop = Math.max(
+                    0,
+                    target.scrollHeight - target.clientHeight,
+                );
                 if (target.scrollTop >= maxTop) {
                     setAutoScroll(false);
                     clearAutoScrollTimer();
@@ -356,8 +363,12 @@ export function BookReaderView() {
         }
 
         const rect = viewport.getBoundingClientRect();
-        const anchorX = anchor ? anchor.clientX - rect.left : viewport.clientWidth / 2;
-        const anchorY = anchor ? anchor.clientY - rect.top : viewport.clientHeight / 2;
+        const anchorX = anchor
+            ? anchor.clientX - rect.left
+            : viewport.clientWidth / 2;
+        const anchorY = anchor
+            ? anchor.clientY - rect.top
+            : viewport.clientHeight / 2;
         const worldX = (viewport.scrollLeft + anchorX) / attachmentZoom;
         const worldY = (viewport.scrollTop + anchorY) / attachmentZoom;
 
@@ -372,7 +383,8 @@ export function BookReaderView() {
     };
 
     const handlePreviewMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
-        if (!previewAttachment || !isZoomableAttachment(previewAttachment)) return;
+        if (!previewAttachment || !isZoomableAttachment(previewAttachment))
+            return;
         if (event.button !== 0) return;
         const viewport = previewViewportRef.current;
         if (!viewport) return;
@@ -387,7 +399,12 @@ export function BookReaderView() {
     };
 
     const handlePreviewMouseMove = (event: ReactMouseEvent<HTMLDivElement>) => {
-        if (!isPreviewDragging || !previewDragStateRef.current || !previewViewportRef.current) return;
+        if (
+            !isPreviewDragging ||
+            !previewDragStateRef.current ||
+            !previewViewportRef.current
+        )
+            return;
         const drag = previewDragStateRef.current;
         previewViewportRef.current.scrollLeft =
             drag.startScrollLeft - (event.clientX - drag.startX);
@@ -417,26 +434,49 @@ export function BookReaderView() {
                 {/* Book identity and progress */}
                 <div className="relative w-6 h-8 shrink-0">
                     {activeBook.cover ? (
-                        <img src={activeBook.cover} alt="" className="w-full h-full object-cover" />
+                        <img
+                            src={activeBook.cover}
+                            alt=""
+                            className="w-full h-full object-cover"
+                        />
                     ) : (
                         <div className="w-full h-full bg-surface-3 flex items-center justify-center">
-                            <BookOpen size={8} className="text-muted-foreground" />
+                            <BookOpen
+                                size={8}
+                                className="text-muted-foreground"
+                            />
                         </div>
                     )}
-                    <div className="absolute inset-0">
-                        <ProgressRing progress={activeBook.progress} size={24} stroke={1.5} />
-                    </div>
                 </div>
 
                 <div className="flex-1 min-w-[140px]">
-                    <span className="text-[12px] font-medium truncate block">{activeBook.title}</span>
+                    <span className="text-[12px] font-medium truncate block">
+                        {activeBook.title}
+                    </span>
                     <span className="text-[11px] text-muted-foreground truncate block">
                         {activeBook.author}
                     </span>
                 </div>
 
-                <span className="tabular-nums text-[12px] text-terminal shrink-0">
+                {/* <span className="relative tabular-nums text-[12px] text-center items-center text-terminal shrink-0">
+                    <ProgressRing
+                        progress={activeBook.progress}
+                        size={30}
+                        stroke={1.5}
+                    />
                     {activeBook.progress}%
+                </span> */}
+
+                <span className="relative w-[35px] h-[35px] flex items-center justify-center text-[12px] text-terminal shrink-0">
+                    <ProgressRing
+                        progress={activeBook.progress}
+                        size={35}
+                        stroke={1.5}
+                    />
+
+                    <span className="absolute inset-0 flex items-center justify-center">
+                        {activeBook.progress}%
+                    </span>
                 </span>
 
                 {bookmarks.length > 0 && (
@@ -513,8 +553,13 @@ export function BookReaderView() {
                                 className="flex items-center gap-1.5 hover:text-foreground transition-colors"
                                 title={`Jump to page ${bookmark.page}`}
                             >
-                                <BookmarkCheck size={11} className="text-terminal" />
-                                <span className="font-mono">{bookmark.text}</span>
+                                <BookmarkCheck
+                                    size={11}
+                                    className="text-terminal"
+                                />
+                                <span className="font-mono">
+                                    {bookmark.text}
+                                </span>
                             </button>
                             <button
                                 onClick={() =>
@@ -539,7 +584,8 @@ export function BookReaderView() {
                 <div className="border-b border-muted bg-surface-1 px-4 py-2 space-y-2 shrink-0">
                     {attachments.length === 0 ? (
                         <p className="text-[11px] text-muted-foreground">
-                            No attachments yet. Use Attach to add supporting files.
+                            No attachments yet. Use Attach to add supporting
+                            files.
                         </p>
                     ) : (
                         <div className="flex gap-2 overflow-x-auto pb-1">
@@ -560,11 +606,15 @@ export function BookReaderView() {
                                             {attachment.name}
                                         </p>
                                         <p className="text-[10px] text-muted-foreground/70">
-                                            {formatAttachmentSize(attachment.size)}
+                                            {formatAttachmentSize(
+                                                attachment.size,
+                                            )}
                                         </p>
                                     </div>
                                     <button
-                                        onClick={() => openAttachmentPopup(attachment)}
+                                        onClick={() =>
+                                            openAttachmentPopup(attachment)
+                                        }
                                         className="border border-muted px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors shrink-0"
                                         title="Open preview popup"
                                     >
@@ -588,7 +638,9 @@ export function BookReaderView() {
                         </div>
                     )}
                     {attachmentError && (
-                        <p className="text-[11px] text-destructive">{attachmentError}</p>
+                        <p className="text-[11px] text-destructive">
+                            {attachmentError}
+                        </p>
                     )}
                 </div>
             )}
@@ -609,7 +661,10 @@ export function BookReaderView() {
                             onClick={(event) => event.stopPropagation()}
                         >
                             <div className="flex items-center gap-3 px-4 py-2 border-b border-muted">
-                                <Paperclip size={13} className="text-terminal shrink-0" />
+                                <Paperclip
+                                    size={13}
+                                    className="text-terminal shrink-0"
+                                />
                                 <div className="min-w-0 flex-1">
                                     <p
                                         className="text-[12px] text-foreground truncate"
@@ -618,7 +673,9 @@ export function BookReaderView() {
                                         {previewAttachment.name}
                                     </p>
                                     <p className="text-[10px] text-muted-foreground">
-                                        {formatAttachmentSize(previewAttachment.size)}
+                                        {formatAttachmentSize(
+                                            previewAttachment.size,
+                                        )}
                                     </p>
                                 </div>
 
@@ -684,9 +741,7 @@ export function BookReaderView() {
                                 <div
                                     ref={previewViewportRef}
                                     className={`h-full w-full overflow-auto border border-muted bg-background ${
-                                        isZoomableAttachment(
-                                            previewAttachment,
-                                        )
+                                        isZoomableAttachment(previewAttachment)
                                             ? isPreviewDragging
                                                 ? "cursor-grabbing"
                                                 : "cursor-grab"
@@ -716,9 +771,15 @@ export function BookReaderView() {
 
                             <div className="border-t border-muted px-4 py-1.5 text-[10px] text-muted-foreground flex items-center gap-2">
                                 <span>Zoom:</span>
-                                <kbd className="border border-muted px-1">+</kbd>
-                                <kbd className="border border-muted px-1">-</kbd>
-                                <kbd className="border border-muted px-1">0</kbd>
+                                <kbd className="border border-muted px-1">
+                                    +
+                                </kbd>
+                                <kbd className="border border-muted px-1">
+                                    -
+                                </kbd>
+                                <kbd className="border border-muted px-1">
+                                    0
+                                </kbd>
                                 <span className="ml-3">Drag to pan</span>
                                 <span className="ml-auto">Esc to close</span>
                             </div>
@@ -728,15 +789,13 @@ export function BookReaderView() {
             )}
 
             {/* Main reading area */}
-            <div className={`flex flex-1 min-h-0 ${isMobile ? "flex-col" : ""}`}>
+            <div
+                className={`flex flex-1 min-h-0 ${isMobile ? "flex-col" : ""}`}
+            >
                 <div
                     ref={scrollRef}
                     className={`${
-                        showNotes
-                            ? isMobile
-                                ? "hidden"
-                                : "w-1/2"
-                            : "flex-1"
+                        showNotes ? (isMobile ? "hidden" : "w-1/2") : "flex-1"
                     } overflow-auto`}
                     style={{ minHeight: 0 }}
                 >
@@ -744,14 +803,25 @@ export function BookReaderView() {
                         <div className="flex flex-col items-center justify-center h-full gap-6 p-12 text-center">
                             <div className="w-32 h-44 bg-surface-2 border border-muted flex items-center justify-center">
                                 {activeBook.cover ? (
-                                    <img src={activeBook.cover} alt="" className="w-full h-full object-cover" />
+                                    <img
+                                        src={activeBook.cover}
+                                        alt=""
+                                        className="w-full h-full object-cover"
+                                    />
                                 ) : (
-                                    <Headphones size={32} className="text-muted-foreground/30" />
+                                    <Headphones
+                                        size={32}
+                                        className="text-muted-foreground/30"
+                                    />
                                 )}
                             </div>
                             <div className="space-y-2">
-                                <h2 className="text-lg font-medium">{activeBook.title}</h2>
-                                <p className="text-[12px] text-muted-foreground">{activeBook.author}</p>
+                                <h2 className="text-lg font-medium">
+                                    {activeBook.title}
+                                </h2>
+                                <p className="text-[12px] text-muted-foreground">
+                                    {activeBook.author}
+                                </p>
                                 {activeBook.description && (
                                     <p className="text-[12px] text-muted-foreground max-w-md mt-3 leading-relaxed">
                                         {activeBook.description}
@@ -760,7 +830,11 @@ export function BookReaderView() {
                                 <div className="flex justify-center mt-2">
                                     <StarRating
                                         value={activeBook.rating}
-                                        onChange={(rating) => updateBook(activeBook.id, { rating })}
+                                        onChange={(rating) =>
+                                            updateBook(activeBook.id, {
+                                                rating,
+                                            })
+                                        }
                                     />
                                 </div>
                             </div>
@@ -780,7 +854,10 @@ export function BookReaderView() {
                         <PDFReader
                             fileUrl={activeBook.fileUrl}
                             bookId={activeBook.id}
-                            initialPage={Math.max(0, (activeBook.currentPage || 1) - 1)}
+                            initialPage={Math.max(
+                                0,
+                                (activeBook.currentPage || 1) - 1,
+                            )}
                             targetPage={jumpToPage}
                             onJumpHandled={() => setJumpToPage(null)}
                             autoScrollEnabled={autoScroll}
@@ -790,7 +867,10 @@ export function BookReaderView() {
                         />
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full gap-4 text-center p-8">
-                            <FileText size={32} className="text-muted-foreground/30" />
+                            <FileText
+                                size={32}
+                                className="text-muted-foreground/30"
+                            />
                             <p className="text-[12px] text-muted-foreground">
                                 No file attached to this book.
                             </p>

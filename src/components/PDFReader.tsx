@@ -6,6 +6,15 @@ import "@react-pdf-viewer/core/lib/styles/index.css";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useBooks } from "@/store/bookStore";
 
+type FullscreenDocument = Document & {
+    webkitExitFullscreen?: () => Promise<void> | void;
+    webkitFullscreenElement?: Element | null;
+};
+
+type FullscreenContainer = HTMLDivElement & {
+    webkitRequestFullscreen?: () => Promise<void> | void;
+};
+
 interface Props {
     fileUrl: string;
     bookId: string;
@@ -58,6 +67,43 @@ export function PDFReader({
     const pageNavigation = pageNavigationPlugin();
     const zoom = zoomPlugin();
 
+    const getFullscreenElement = useCallback(() => {
+        const fullscreenDocument = document as FullscreenDocument;
+        return (
+            document.fullscreenElement ??
+            fullscreenDocument.webkitFullscreenElement ??
+            null
+        );
+    }, []);
+
+    const exitNativeFullscreen = useCallback(async () => {
+        const fullscreenDocument = document as FullscreenDocument;
+        if (document.fullscreenElement && document.exitFullscreen) {
+            await document.exitFullscreen();
+            return;
+        }
+        if (fullscreenDocument.webkitFullscreenElement) {
+            await fullscreenDocument.webkitExitFullscreen?.();
+        }
+    }, []);
+
+    const requestNativeFullscreen = useCallback(async () => {
+        const container = viewerContainerRef.current as FullscreenContainer | null;
+        if (!container) return false;
+
+        if (typeof container.requestFullscreen === "function") {
+            await container.requestFullscreen();
+            return true;
+        }
+
+        if (typeof container.webkitRequestFullscreen === "function") {
+            await container.webkitRequestFullscreen();
+            return true;
+        }
+
+        return false;
+    }, []);
+
     // Trigger a controlled remount to jump to selected bookmark pages.
     useEffect(() => {
         if (targetPage == null) return;
@@ -75,14 +121,19 @@ export function PDFReader({
 
     useEffect(() => {
         const handleFullscreenChange = () => {
-            setIsNativeFullscreen(Boolean(document.fullscreenElement));
+            setIsNativeFullscreen(Boolean(getFullscreenElement()));
         };
 
         document.addEventListener("fullscreenchange", handleFullscreenChange);
+        document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
         return () => {
             document.removeEventListener("fullscreenchange", handleFullscreenChange);
+            document.removeEventListener(
+                "webkitfullscreenchange",
+                handleFullscreenChange,
+            );
         };
-    }, []);
+    }, [getFullscreenElement]);
 
     useEffect(() => {
         if (!immersiveMode) return;
@@ -174,25 +225,20 @@ export function PDFReader({
     };
 
     const toggleFullScreen = async () => {
-        const nativeFullscreenSupported =
-            typeof document !== "undefined" &&
-            !!document.fullscreenEnabled &&
-            typeof viewerContainerRef.current?.requestFullscreen === "function";
-
-        // On many mobile browsers (especially iOS Safari), element fullscreen isn't reliable.
-        if (isMobile || !nativeFullscreenSupported) {
-            setImmersiveMode((value) => !value);
-            return;
-        }
-
         try {
-            if (document.fullscreenElement) {
-                await document.exitFullscreen();
-            } else if (viewerContainerRef.current?.requestFullscreen) {
-                await viewerContainerRef.current.requestFullscreen();
-            } else {
-                setImmersiveMode((value) => !value);
+            if (getFullscreenElement()) {
+                await exitNativeFullscreen();
+                setImmersiveMode(false);
+                return;
             }
+
+            const enteredNativeFullscreen = await requestNativeFullscreen();
+            if (enteredNativeFullscreen) {
+                setImmersiveMode(false);
+                return;
+            }
+
+            setImmersiveMode((value) => !value);
         } catch {
             setImmersiveMode((value) => !value);
         }
@@ -365,7 +411,11 @@ export function PDFReader({
                             onClick={toggleFullScreen}
                             className="border border-muted bg-background px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors"
                         >
-                            {isNativeFullscreen || immersiveMode ? "Exit Fullscreen" : "Fullscreen"}
+                            {isNativeFullscreen || immersiveMode
+                                ? isMobile && !isNativeFullscreen
+                                    ? "Exit Reader Mode"
+                                    : "Exit Fullscreen"
+                                : "Fullscreen"}
                         </button>
                     </div>
                 </div>
@@ -386,6 +436,11 @@ export function PDFReader({
                         onDocumentLoad={handleDocumentLoad}
                         onZoom={(event) => setZoomScale(event.scale)}
                         theme={{ theme: "dark" }}
+                        transformGetDocumentParams={(options) => ({
+                            ...options,
+                            // Mitigates PDF.js advisory GHSA-wgrm-67xf-hhpq at runtime.
+                            isEvalSupported: false,
+                        })}
                     />
                 </Worker>
             </div>

@@ -1,4 +1,5 @@
-﻿export type BookFormat = "pdf" | "epub" | "audio" | "video" | "podcast" | "url";
+export type BookFormat = "pdf" | "epub" | "audio" | "video" | "podcast" | "url";
+export type SyncAction = "push" | "pull";
 
 export interface BookAttachment {
     id: string;
@@ -72,7 +73,55 @@ export interface AppSettings {
     stackMaxVisible: number; // 2-5
     autoScrollSpeed: number; // 0 = off, 1-5
     sidebarVisible: boolean;
+    collapsibleSidebar: boolean;
     showCalendarHeatmap: boolean;
+}
+
+export interface AuthSession {
+    id: string;
+    username: string;
+    name: string;
+    role: string;
+    isActive: boolean;
+    lastLoginAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface SyncRepository {
+    owner: string;
+    name: string;
+    branch: string;
+}
+
+export interface SyncSnapshotSummary {
+    booksCount: number;
+    notesCount: number;
+    hasSettings: boolean;
+    uploadFilesCount: number;
+    totalUploadBytes?: number;
+}
+
+export interface SyncSnapshot {
+    version: number;
+    generatedAt: string;
+    triggeredBy: string;
+    summary: SyncSnapshotSummary;
+}
+
+export interface SyncCommit {
+    sha: string;
+    message: string;
+    date: string;
+    author: string;
+    url: string;
+}
+
+export interface SyncAppliedSummary {
+    booksCount: number;
+    notesCount: number;
+    hasSettings: boolean;
+    uploadFilesCount: number;
 }
 
 export type AppView = "library" | "reader" | "notes" | "calendar";

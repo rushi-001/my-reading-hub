@@ -1,7 +1,9 @@
-﻿import { createAction } from "@reduxjs/toolkit";
+import { createAction } from "@reduxjs/toolkit";
 import type { AppSettings, Book, BookFormat, BookUploadFiles, Note } from "@/types/book";
 
 export const bootstrapRequested = createAction("bookSaga/bootstrapRequested");
+export const pushSyncRequested = createAction("bookSaga/pushSyncRequested");
+export const pullSyncRequested = createAction("bookSaga/pullSyncRequested");
 
 export const createBookRequested = createAction<{
     book: Book;

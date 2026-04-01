@@ -1,6 +1,12 @@
 import { configureStore } from "@reduxjs/toolkit";
 import createSagaMiddleware from "redux-saga";
-import { bookReducer, BOOKS_KEY, NOTES_KEY, SETTINGS_KEY } from "@/store/bookSlice";
+import {
+    bookReducer,
+    BOOKS_KEY,
+    NOTES_KEY,
+    SETTINGS_KEY,
+    SYNC_META_KEY,
+} from "@/store/bookSlice";
 import { bookRootSaga } from "@/store/bookSaga";
 
 const sagaMiddleware = createSagaMiddleware();
@@ -18,6 +24,7 @@ export const appStore = configureStore({
 sagaMiddleware.run(bookRootSaga);
 
 if (typeof window !== "undefined") {
+    window.localStorage.removeItem("secondbrain_auth_session");
     let lastSerialized = "";
     appStore.subscribe(() => {
         const state = appStore.getState().book;
@@ -25,6 +32,8 @@ if (typeof window !== "undefined") {
             books: state.books,
             notes: state.notes,
             settings: state.settings,
+            lastPushedAt: state.api.lastPushedAt,
+            lastPulledAt: state.api.lastPulledAt,
         });
 
         if (nextSerialized === lastSerialized) return;
@@ -33,6 +42,13 @@ if (typeof window !== "undefined") {
         localStorage.setItem(BOOKS_KEY, JSON.stringify(state.books));
         localStorage.setItem(NOTES_KEY, JSON.stringify(state.notes));
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+        localStorage.setItem(
+            SYNC_META_KEY,
+            JSON.stringify({
+                lastPushedAt: state.api.lastPushedAt,
+                lastPulledAt: state.api.lastPulledAt,
+            }),
+        );
     });
 }
 

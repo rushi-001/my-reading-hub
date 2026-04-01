@@ -1,15 +1,18 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type {
+    AuthSession,
     AppSettings,
     Book,
     BookAttachment,
     BookFormat,
     Note,
+    SyncAction,
 } from "@/types/book";
 
 export const BOOKS_KEY = "secondbrain_books";
 export const NOTES_KEY = "secondbrain_notes";
 export const SETTINGS_KEY = "secondbrain_settings";
+export const SYNC_META_KEY = "secondbrain_sync_meta";
 
 const COMMAND_PALETTE_POSITIONS = new Set([
     "top-left",
@@ -32,6 +35,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     stackMaxVisible: 3,
     autoScrollSpeed: 0,
     sidebarVisible: true,
+    collapsibleSidebar: true,
     showCalendarHeatmap: true,
 };
 
@@ -171,6 +175,29 @@ function loadSettings(): AppSettings {
     }
 }
 
+function loadSyncMeta(): {
+    lastPushedAt: string | null;
+    lastPulledAt: string | null;
+} {
+    try {
+        const stored = JSON.parse(localStorage.getItem(SYNC_META_KEY) || "{}") as {
+            lastPushedAt?: unknown;
+            lastPulledAt?: unknown;
+        };
+        return {
+            lastPushedAt:
+                typeof stored.lastPushedAt === "string" ? stored.lastPushedAt : null,
+            lastPulledAt:
+                typeof stored.lastPulledAt === "string" ? stored.lastPulledAt : null,
+        };
+    } catch {
+        return {
+            lastPushedAt: null,
+            lastPulledAt: null,
+        };
+    }
+}
+
 export interface BookState {
     books: Book[];
     notes: Note[];
@@ -181,8 +208,14 @@ export interface BookState {
     isSettingsOpen: boolean;
     isAddBookOpen: boolean;
     isShortcutsOpen: boolean;
+    syncDialogAction: SyncAction | null;
     audioUrl: string | null;
     isPlaying: boolean;
+    auth: {
+        isAuthenticated: boolean;
+        isChecking: boolean;
+        session: AuthSession | null;
+    };
     settings: AppSettings;
     library: {
         items: Book[];
@@ -204,10 +237,16 @@ export interface BookState {
         isLoading: boolean;
     };
     api: {
+        isBootstrapping: boolean;
         isSyncing: boolean;
+        activeSyncAction: SyncAction | null;
         lastError: string | null;
+        lastPushedAt: string | null;
+        lastPulledAt: string | null;
     };
 }
+
+const initialSyncMeta = loadSyncMeta();
 
 const initialState: BookState = {
     books: loadBooks(),
@@ -219,8 +258,14 @@ const initialState: BookState = {
     isSettingsOpen: false,
     isAddBookOpen: false,
     isShortcutsOpen: false,
+    syncDialogAction: null,
     audioUrl: null,
     isPlaying: false,
+    auth: {
+        isAuthenticated: false,
+        isChecking: true,
+        session: null,
+    },
     settings: loadSettings(),
     library: {
         items: [],
@@ -242,8 +287,12 @@ const initialState: BookState = {
         isLoading: false,
     },
     api: {
+        isBootstrapping: false,
         isSyncing: false,
+        activeSyncAction: null,
         lastError: null,
+        lastPushedAt: initialSyncMeta.lastPushedAt,
+        lastPulledAt: initialSyncMeta.lastPulledAt,
     },
 };
 
@@ -477,6 +526,9 @@ export const bookSlice = createSlice({
         setShortcutsOpen(state, action: PayloadAction<boolean>) {
             state.isShortcutsOpen = action.payload;
         },
+        setSyncDialogAction(state, action: PayloadAction<SyncAction | null>) {
+            state.syncDialogAction = action.payload;
+        },
         setAudioUrl(state, action: PayloadAction<string | null>) {
             state.audioUrl = action.payload;
             if (!action.payload) state.isPlaying = false;
@@ -484,11 +536,46 @@ export const bookSlice = createSlice({
         setPlaying(state, action: PayloadAction<boolean>) {
             state.isPlaying = action.payload;
         },
+        setAuthSession(state, action: PayloadAction<AuthSession>) {
+            state.auth.isAuthenticated = true;
+            state.auth.session = action.payload;
+            state.auth.isChecking = false;
+        },
+        setAuthChecking(state, action: PayloadAction<boolean>) {
+            state.auth.isChecking = action.payload;
+        },
+        clearAuthSession(state) {
+            state.auth.isAuthenticated = false;
+            state.auth.isChecking = false;
+            state.auth.session = null;
+            state.activeBookId = null;
+            state.activeNoteId = null;
+            state.showNotes = false;
+            state.isCommandOpen = false;
+            state.isSettingsOpen = false;
+            state.isAddBookOpen = false;
+            state.isShortcutsOpen = false;
+            state.syncDialogAction = null;
+            state.audioUrl = null;
+            state.isPlaying = false;
+        },
+        setApiBootstrapping(state, action: PayloadAction<boolean>) {
+            state.api.isBootstrapping = action.payload;
+        },
         setApiSyncing(state, action: PayloadAction<boolean>) {
             state.api.isSyncing = action.payload;
         },
+        setActiveSyncAction(state, action: PayloadAction<SyncAction | null>) {
+            state.api.activeSyncAction = action.payload;
+        },
         setApiError(state, action: PayloadAction<string | null>) {
             state.api.lastError = action.payload;
+        },
+        setLastPushedAt(state, action: PayloadAction<string | null>) {
+            state.api.lastPushedAt = action.payload;
+        },
+        setLastPulledAt(state, action: PayloadAction<string | null>) {
+            state.api.lastPulledAt = action.payload;
         },
         setLibraryLoading(state, action: PayloadAction<boolean>) {
             state.library.isLoading = action.payload;

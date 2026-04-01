@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import type {
+    AuthSession,
     AppSettings,
     Book,
     BookAttachment,
@@ -8,8 +9,10 @@ import type {
     BookUploadFiles,
     Bookmark,
     Note,
+    SyncAction,
 } from "@/types/book";
 import type { AppDispatch, RootState } from "@/store/appStore";
+import { logoutAdminApi } from "@/store/api";
 import { bookActions } from "@/store/bookSlice";
 import {
     addAttachmentRequested,
@@ -19,6 +22,8 @@ import {
     deleteBookRequested,
     deleteNoteRequested,
     librarySearchRequested,
+    pullSyncRequested,
+    pushSyncRequested,
     removeAttachmentRequested,
     updateBookRequested,
     updateNoteRequested,
@@ -37,9 +42,23 @@ export interface BookStore {
     isSettingsOpen: boolean;
     isAddBookOpen: boolean;
     isShortcutsOpen: boolean;
+    syncDialogAction: SyncAction | null;
     audioUrl: string | null;
     isPlaying: boolean;
+    auth: {
+        isAuthenticated: boolean;
+        isChecking: boolean;
+        session: AuthSession | null;
+    };
     settings: AppSettings;
+    api: {
+        isBootstrapping: boolean;
+        isSyncing: boolean;
+        activeSyncAction: SyncAction | null;
+        lastError: string | null;
+        lastPushedAt: string | null;
+        lastPulledAt: string | null;
+    };
     library: {
         items: Book[];
         query: string;
@@ -91,8 +110,12 @@ export interface BookStore {
     setSettingsOpen: (v: boolean) => void;
     setAddBookOpen: (v: boolean) => void;
     setShortcutsOpen: (v: boolean) => void;
+    setSyncDialogAction: (action: SyncAction | null) => void;
     setAudioUrl: (url: string | null) => void;
     setPlaying: (v: boolean) => void;
+    logout: () => Promise<void>;
+    requestPushSync: () => void;
+    requestPullSync: () => void;
     updateSettings: (patch: Partial<AppSettings>) => void;
     searchLibrary: (params: {
         query: string;
@@ -386,6 +409,11 @@ export function useBooks(): BookStore {
         (v: boolean) => dispatch(bookActions.setShortcutsOpen(v)),
         [dispatch],
     );
+    const setSyncDialogAction = useCallback(
+        (action: SyncAction | null) =>
+            dispatch(bookActions.setSyncDialogAction(action)),
+        [dispatch],
+    );
     const setAudioUrl = useCallback(
         (url: string | null) => dispatch(bookActions.setAudioUrl(url)),
         [dispatch],
@@ -394,6 +422,25 @@ export function useBooks(): BookStore {
         (v: boolean) => dispatch(bookActions.setPlaying(v)),
         [dispatch],
     );
+    const logout = useCallback(async () => {
+        try {
+            const adminId = state.auth.session?.id;
+            await logoutAdminApi(adminId ? { adminId } : undefined);
+        } catch {
+            // Clear the local session even if backend logout fails, so the app
+            // doesn't stay in an inconsistent signed-in UI state.
+        } finally {
+            dispatch(bookActions.clearAuthSession());
+        }
+    }, [dispatch, state.auth.session?.id]);
+    const requestPushSync = useCallback(() => {
+        if (state.api.isSyncing) return;
+        dispatch(pushSyncRequested());
+    }, [dispatch, state.api.isSyncing]);
+    const requestPullSync = useCallback(() => {
+        if (state.api.isSyncing) return;
+        dispatch(pullSyncRequested());
+    }, [dispatch, state.api.isSyncing]);
 
     const updateSettings = useCallback(
         (patch: Partial<AppSettings>) => {
@@ -452,9 +499,12 @@ export function useBooks(): BookStore {
         isSettingsOpen: state.isSettingsOpen,
         isAddBookOpen: state.isAddBookOpen,
         isShortcutsOpen: state.isShortcutsOpen,
+        syncDialogAction: state.syncDialogAction,
         audioUrl: state.audioUrl,
         isPlaying: state.isPlaying,
+        auth: state.auth,
         settings: state.settings,
+        api: state.api,
         library,
         commandSearch,
         addBook,
@@ -477,8 +527,12 @@ export function useBooks(): BookStore {
         setSettingsOpen,
         setAddBookOpen,
         setShortcutsOpen,
+        setSyncDialogAction,
         setAudioUrl,
         setPlaying,
+        logout,
+        requestPushSync,
+        requestPullSync,
         updateSettings,
         searchLibrary,
         searchCommandBooks,

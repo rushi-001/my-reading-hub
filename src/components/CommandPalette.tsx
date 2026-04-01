@@ -4,18 +4,26 @@ import { Command } from "cmdk";
 import {
     ArrowRight,
     BookOpen,
-    Clock,
+    Clock3,
+    Download,
     FileText,
     Headphones,
+    History,
+    LogOut,
     Play,
     Plus,
     Search,
     Settings,
     Star,
+    Upload,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+    formatSyncRelative,
+    getLatestSyncTimestamp,
+} from "@/lib/syncStatus";
 import { useBooks } from "@/store/bookStore";
 import type { AppSettings } from "@/types/book";
-import { useNavigate } from "react-router-dom";
 
 const FORMAT_ICONS: Record<string, React.ReactNode> = {
     pdf: <FileText size={15} />,
@@ -51,6 +59,10 @@ export function CommandPalette() {
         settings,
         setSettingsOpen,
         setAddBookOpen,
+        api,
+        setSyncDialogAction,
+        logout,
+        auth,
     } = useBooks();
     const navigate = useNavigate();
 
@@ -61,6 +73,13 @@ export function CommandPalette() {
         () => (queryIsEmpty ? books.slice(0, 8) : commandSearch.results),
         [books, commandSearch.results, queryIsEmpty],
     );
+    const lastRead = getLastReadBook();
+    const latestSync = useMemo(
+        () => getLatestSyncTimestamp(api.lastPushedAt, api.lastPulledAt),
+        [api.lastPulledAt, api.lastPushedAt],
+    );
+    const authLabel =
+        auth.session?.username ?? auth.session?.name ?? auth.session?.id ?? "admin";
 
     useEffect(() => {
         if (!isCommandOpen) return;
@@ -69,7 +88,6 @@ export function CommandPalette() {
         setTimeout(() => inputRef.current?.focus(), 50);
     }, [clearCommandSearch, isCommandOpen]);
 
-    // Backend-driven command search with small debounce.
     useEffect(() => {
         if (!isCommandOpen) return;
         if (queryIsEmpty) {
@@ -96,7 +114,18 @@ export function CommandPalette() {
         close();
     };
 
-    const lastRead = getLastReadBook();
+    const openSyncDialog = (action: "push" | "pull") => {
+        if (api.isSyncing) return;
+        setSyncDialogAction(action);
+        close();
+    };
+
+    const handleLogout = async () => {
+        await logout();
+        navigate("/login", { replace: true });
+        close();
+    };
+
     const anchorClass =
         PALETTE_ANCHOR_CLASS[settings.commandPalettePosition] ??
         PALETTE_ANCHOR_CLASS["top-center"];
@@ -119,7 +148,7 @@ export function CommandPalette() {
                     />
 
                     <div
-                        className={`fixed inset-0 z-50 flex p-4 pointer-events-none sm:p-6 ${anchorClass}`}
+                        className={`fixed inset-0 z-50 flex pointer-events-none p-4 sm:p-6 ${anchorClass}`}
                     >
                         <motion.div
                             key="palette"
@@ -130,35 +159,34 @@ export function CommandPalette() {
                                 duration: 0.15,
                                 ease: [0.16, 1, 0.3, 1],
                             }}
-                            className="w-[640px] max-w-[95vw] pointer-events-auto"
+                            className="pointer-events-auto w-[640px] max-w-[95vw]"
                         >
                             <Command
-                                className="border border-muted bg-background overflow-hidden"
+                                className="overflow-hidden border border-muted bg-background"
                                 shouldFilter={false}
                             >
-                                <div className="flex items-center border-b border-muted px-4 gap-3">
+                                <div className="flex items-center gap-3 border-b border-muted px-4">
                                     <Search
                                         size={15}
-                                        className="text-muted-foreground shrink-0"
+                                        className="shrink-0 text-muted-foreground"
                                     />
                                     <Command.Input
                                         ref={inputRef}
                                         value={query}
                                         onValueChange={setQuery}
                                         placeholder="Search books, #tags, tag:focus, group:History..."
-                                        className="flex-1 bg-transparent py-4 text-[12px] text-foreground placeholder:text-muted-foreground outline-none font-mono"
+                                        className="flex-1 bg-transparent py-4 font-mono text-[12px] text-foreground outline-none placeholder:text-muted-foreground"
                                     />
-                                    <kbd className="text-[10px] text-muted-foreground border border-muted px-1.5 py-0.5 shrink-0">
+                                    <kbd className="shrink-0 border border-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                                         ESC
                                     </kbd>
                                 </div>
 
                                 <Command.List className="max-h-[400px] overflow-y-auto p-1">
-                                    {/* Hide quick actions when query is present so results are selected first. */}
                                     {queryIsEmpty && (
                                         <Command.Group
                                             heading={
-                                                <span className="px-3 py-1.5 text-[10px] tracking-widest text-muted-foreground uppercase block">
+                                                <span className="block px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
                                                     Quick Actions
                                                 </span>
                                             }
@@ -207,7 +235,7 @@ export function CommandPalette() {
                                                 <PaletteItem
                                                     icon={
                                                         settings.showIcons ? (
-                                                            <Clock size={15} />
+                                                            <Clock3 size={15} />
                                                         ) : null
                                                     }
                                                     label={`Continue: ${lastRead.title}`}
@@ -222,6 +250,55 @@ export function CommandPalette() {
                                             <PaletteItem
                                                 icon={
                                                     settings.showIcons ? (
+                                                        <Upload size={15} />
+                                                    ) : null
+                                                }
+                                                label={
+                                                    api.isSyncing &&
+                                                    api.activeSyncAction === "push"
+                                                        ? "Uploading to GitHub..."
+                                                        : "Upload to GitHub"
+                                                }
+                                                hint={formatSyncRelative(
+                                                    api.lastPushedAt,
+                                                    "No uploads yet",
+                                                )}
+                                                onSelect={() => openSyncDialog("push")}
+                                            />
+                                            <PaletteItem
+                                                icon={
+                                                    settings.showIcons ? (
+                                                        <Download size={15} />
+                                                    ) : null
+                                                }
+                                                label={
+                                                    api.isSyncing &&
+                                                    api.activeSyncAction === "pull"
+                                                        ? "Downloading from GitHub..."
+                                                        : "Download from GitHub"
+                                                }
+                                                hint={formatSyncRelative(
+                                                    api.lastPulledAt,
+                                                    "No downloads yet",
+                                                )}
+                                                onSelect={() => openSyncDialog("pull")}
+                                            />
+                                            <PaletteItem
+                                                icon={
+                                                    settings.showIcons ? (
+                                                        <History size={15} />
+                                                    ) : null
+                                                }
+                                                label="Sync History"
+                                                hint="recent GitHub commits"
+                                                onSelect={() => {
+                                                    navigate("/sync-history");
+                                                    close();
+                                                }}
+                                            />
+                                            <PaletteItem
+                                                icon={
+                                                    settings.showIcons ? (
                                                         <Settings size={15} />
                                                     ) : null
                                                 }
@@ -232,16 +309,24 @@ export function CommandPalette() {
                                                     close();
                                                 }}
                                             />
+                                            <PaletteItem
+                                                icon={
+                                                    settings.showIcons ? (
+                                                        <LogOut size={15} />
+                                                    ) : null
+                                                }
+                                                label="Sign Out"
+                                                hint={authLabel}
+                                                onSelect={handleLogout}
+                                            />
                                         </Command.Group>
                                     )}
 
                                     {rankedBooks.length > 0 && (
                                         <Command.Group
                                             heading={
-                                                <span className="px-3 py-1.5 text-[10px] tracking-widest text-muted-foreground uppercase block">
-                                                    {queryIsEmpty
-                                                        ? "Recent Books"
-                                                        : "Results"}
+                                                <span className="block px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+                                                    {queryIsEmpty ? "Recent Books" : "Results"}
                                                 </span>
                                             }
                                         >
@@ -250,34 +335,28 @@ export function CommandPalette() {
                                                     key={book.id}
                                                     value={book.id}
                                                     onSelect={() =>
-                                                        openBookFromPalette(
-                                                            book.id,
-                                                        )
+                                                        openBookFromPalette(book.id)
                                                     }
-                                                    className="group flex items-center gap-3 px-3 py-2.5 cursor-pointer text-muted-foreground hover:bg-foreground hover:text-background aria-selected:bg-foreground aria-selected:text-background transition-colors duration-75"
+                                                    className="group flex cursor-pointer items-center gap-3 px-3 py-2.5 text-muted-foreground transition-colors duration-75 hover:bg-foreground hover:text-background aria-selected:bg-foreground aria-selected:text-background"
                                                 >
                                                     {settings.showIcons && (
                                                         <span className="shrink-0 opacity-60">
-                                                            {
-                                                                FORMAT_ICONS[
-                                                                    book.format
-                                                                ]
-                                                            }
+                                                            {FORMAT_ICONS[book.format]}
                                                         </span>
                                                     )}
-                                                    <span className="flex-1 min-w-0">
-                                                        <span className="block text-[12px] font-medium truncate leading-tight">
+                                                    <span className="min-w-0 flex-1">
+                                                        <span className="block truncate text-[12px] font-medium leading-tight">
                                                             {book.title}
                                                         </span>
-                                                        <span className="block text-[11px] opacity-60 truncate">
+                                                        <span className="block truncate text-[11px] opacity-60">
                                                             {book.author}
                                                         </span>
                                                     </span>
-                                                    <span className="tabular-nums text-[11px] opacity-50 shrink-0">
+                                                    <span className="shrink-0 text-[11px] tabular-nums opacity-50">
                                                         {book.progress}%
                                                     </span>
                                                     {book.rating > 0 && (
-                                                        <span className="flex gap-0.5 shrink-0">
+                                                        <span className="flex shrink-0 gap-0.5">
                                                             {Array.from({
                                                                 length: book.rating,
                                                             }).map((_, index) => (
@@ -313,7 +392,7 @@ export function CommandPalette() {
                                     )}
                                 </Command.List>
 
-                                <div className="border-t border-muted px-4 py-2 flex items-center gap-4 text-[10px] text-muted-foreground">
+                                <div className="flex items-center gap-4 border-t border-muted px-4 py-2 text-[10px] text-muted-foreground">
                                     <span className="flex items-center gap-1">
                                         <kbd className="border border-muted px-1">
                                             Up/Down
@@ -337,6 +416,14 @@ export function CommandPalette() {
                                             ? `${rankedBooks.length} books`
                                             : `${commandSearch.totalItems} matches`}
                                     </span>
+                                    {queryIsEmpty && (
+                                        <span className="opacity-60">
+                                            {formatSyncRelative(
+                                                latestSync,
+                                                "No sync yet",
+                                            )}
+                                        </span>
+                                    )}
                                 </div>
                             </Command>
                         </motion.div>
@@ -361,12 +448,12 @@ function PaletteItem({
     return (
         <Command.Item
             onSelect={onSelect}
-            className="flex items-center gap-3 px-3 py-2.5 cursor-pointer text-muted-foreground hover:bg-foreground hover:text-background aria-selected:bg-foreground aria-selected:text-background transition-colors duration-75"
+            className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-muted-foreground transition-colors duration-75 hover:bg-foreground hover:text-background aria-selected:bg-foreground aria-selected:text-background"
         >
             {icon && <span className="shrink-0 opacity-60">{icon}</span>}
             <span className="flex-1 text-[12px]">{label}</span>
             {hint && <span className="text-[11px] opacity-40">{hint}</span>}
-            <ArrowRight size={13} className="opacity-40 shrink-0" />
+            <ArrowRight size={13} className="shrink-0 opacity-40" />
         </Command.Item>
     );
 }

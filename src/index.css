@@ -179,3 +179,18 @@
 .rpv-core__page-layer {
   background: hsl(var(--background)) !important;
 }
+
+/* Keep PDF text-layer positioning independent from app typography resets. */
+.rpv-core__text-layer,
+.rpv-core__text-layer * {
+  box-sizing: content-box !important;
+  letter-spacing: 0 !important;
+  word-spacing: normal !important;
+  text-indent: 0 !important;
+  text-transform: none !important;
+}
+
+.rpv-core__text-layer-text {
+  line-height: 1 !important;
+  font-kerning: none;
+}

@@ -1,13 +1,24 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
+    Download,
     Eye,
     EyeOff,
+    Github,
+    History,
     Keyboard,
+    LogOut,
     Settings,
+    Upload,
     X,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+    formatSyncRelative,
+    formatSyncTimestamp,
+    getLatestSyncTimestamp,
+} from "@/lib/syncStatus";
 import { useBooks } from "@/store/bookStore";
-import type { AppSettings } from "@/types/book";
+import type { AppSettings, SyncAction } from "@/types/book";
 
 const COMMAND_PALETTE_POSITION_OPTIONS: Array<{
     value: AppSettings["commandPalettePosition"];
@@ -32,12 +43,35 @@ export function SettingsPanel() {
         setShortcutsOpen,
         settings,
         updateSettings,
+        api,
+        auth,
+        logout,
+        setSyncDialogAction,
     } = useBooks();
+    const navigate = useNavigate();
+
+    const latestSyncTimestamp = getLatestSyncTimestamp(
+        api.lastPushedAt,
+        api.lastPulledAt,
+    );
+    const authLabel =
+        auth.session?.username ?? auth.session?.name ?? auth.session?.id ?? "admin";
 
     const setAutoScrollSpeed = (value: number) => {
         if (!Number.isFinite(value)) return;
         const clamped = Math.max(0, Math.min(5, Number(value.toFixed(1))));
         updateSettings({ autoScrollSpeed: clamped });
+    };
+
+    const openSyncDialog = (action: SyncAction) => {
+        if (api.isSyncing) return;
+        setSyncDialogAction(action);
+    };
+
+    const handleLogout = async () => {
+        setSettingsOpen(false);
+        await logout();
+        navigate("/login", { replace: true });
     };
 
     return (
@@ -58,23 +92,132 @@ export function SettingsPanel() {
                         animate={{ x: 0 }}
                         exit={{ x: "100%" }}
                         transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                        className="fixed right-0 top-0 bottom-0 z-50 w-[360px] max-w-full bg-background border-l border-muted flex flex-col"
+                        className="fixed right-0 top-0 bottom-0 z-50 flex w-[380px] max-w-full flex-col border-l border-muted bg-background"
                     >
-                        {/* Header */}
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-muted">
+                        <div className="flex items-center justify-between border-b border-muted px-5 py-4">
                             <div className="flex items-center gap-2">
                                 <Settings size={15} className="text-terminal" />
-                                <span className="text-[12px] font-mono font-medium">Settings</span>
+                                <span className="text-[12px] font-mono font-medium">
+                                    Settings
+                                </span>
                             </div>
                             <button
                                 onClick={() => setSettingsOpen(false)}
-                                className="text-muted-foreground hover:text-foreground transition-colors"
+                                className="text-muted-foreground transition-colors hover:text-foreground"
                             >
                                 <X size={15} />
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                        <div className="flex-1 space-y-6 overflow-y-auto p-5">
+                            <Section label="Account">
+                                <div className="space-y-3 rounded-2xl border border-muted bg-surface-1 p-4">
+                                    <div>
+                                        <p className="text-[12px] text-foreground">
+                                            Signed in as
+                                        </p>
+                                        <p className="mt-1 break-all text-[11px] text-terminal">
+                                            {authLabel}
+                                        </p>
+                                        <p className="mt-2 text-[10px] text-muted-foreground">
+                                            The active admin session is coming from the backend.
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        onClick={handleLogout}
+                                        className="flex w-full items-center justify-center gap-2 border border-muted px-3 py-2 text-[11px] text-muted-foreground transition-colors hover:border-muted-foreground hover:text-foreground"
+                                    >
+                                        <LogOut size={13} />
+                                        Sign Out
+                                    </button>
+                                </div>
+                            </Section>
+
+                            <Section label="Sync">
+                                <div className="space-y-3 rounded-2xl border border-muted bg-surface-1 p-4">
+                                    <div className="flex items-center gap-2">
+                                        <Github size={14} className="text-terminal" />
+                                        <div>
+                                            <p className="text-[12px] text-foreground">
+                                                GitHub Sync
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                Manage uploads and downloads separately.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <SyncButton
+                                        icon={<Upload size={13} />}
+                                        label="Upload to GitHub"
+                                        description={formatSyncRelative(
+                                            api.lastPushedAt,
+                                            "No uploads yet",
+                                        )}
+                                        isLoading={
+                                            api.isSyncing &&
+                                            api.activeSyncAction === "push"
+                                        }
+                                        onClick={() => openSyncDialog("push")}
+                                    />
+                                    <SyncButton
+                                        icon={<Download size={13} />}
+                                        label="Download from GitHub"
+                                        description={formatSyncRelative(
+                                            api.lastPulledAt,
+                                            "No downloads yet",
+                                        )}
+                                        isLoading={
+                                            api.isSyncing &&
+                                            api.activeSyncAction === "pull"
+                                        }
+                                        onClick={() => openSyncDialog("pull")}
+                                    />
+
+                                    <button
+                                        onClick={() => {
+                                            setSettingsOpen(false);
+                                            navigate("/sync-history");
+                                        }}
+                                        className="flex w-full items-center justify-center gap-2 border border-muted px-3 py-2 text-[11px] text-muted-foreground transition-colors hover:border-muted-foreground hover:text-foreground"
+                                    >
+                                        <History size={13} />
+                                        View Sync History
+                                    </button>
+
+                                    <div className="space-y-1 rounded-xl border border-muted bg-background/70 p-3 text-[10px] text-muted-foreground">
+                                        <p>
+                                            Latest activity:{" "}
+                                            <span className="text-foreground">
+                                                {formatSyncTimestamp(
+                                                    latestSyncTimestamp,
+                                                    "No sync recorded",
+                                                )}
+                                            </span>
+                                        </p>
+                                        <p>
+                                            Last upload:{" "}
+                                            <span className="text-foreground">
+                                                {formatSyncTimestamp(
+                                                    api.lastPushedAt,
+                                                    "Never",
+                                                )}
+                                            </span>
+                                        </p>
+                                        <p>
+                                            Last download:{" "}
+                                            <span className="text-foreground">
+                                                {formatSyncTimestamp(
+                                                    api.lastPulledAt,
+                                                    "Never",
+                                                )}
+                                            </span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </Section>
+
                             <Section label="Command Palette">
                                 <Row
                                     label="Show Icons"
@@ -82,21 +225,27 @@ export function SettingsPanel() {
                                 >
                                     <Toggle
                                         value={settings.showIcons}
-                                        onChange={(value) => updateSettings({ showIcons: value })}
+                                        onChange={(value) =>
+                                            updateSettings({ showIcons: value })
+                                        }
                                     />
                                 </Row>
                                 <Row
                                     label="Position"
                                     description="Pick where Cmd/Ctrl + K opens"
                                 >
-                                    <div className="grid grid-cols-3 gap-1 w-[168px]">
+                                    <div className="grid w-[168px] grid-cols-3 gap-1">
                                         {COMMAND_PALETTE_POSITION_OPTIONS.map((option) => (
                                             <PillBtn
                                                 key={option.value}
-                                                active={settings.commandPalettePosition === option.value}
+                                                active={
+                                                    settings.commandPalettePosition ===
+                                                    option.value
+                                                }
                                                 onClick={() =>
                                                     updateSettings({
-                                                        commandPalettePosition: option.value,
+                                                        commandPalettePosition:
+                                                            option.value,
                                                     })
                                                 }
                                                 label={option.short}
@@ -129,9 +278,13 @@ export function SettingsPanel() {
                                             {[2, 3, 4, 5].map((value) => (
                                                 <PillBtn
                                                     key={value}
-                                                    active={settings.stackMaxVisible === value}
+                                                    active={
+                                                        settings.stackMaxVisible === value
+                                                    }
                                                     onClick={() =>
-                                                        updateSettings({ stackMaxVisible: value })
+                                                        updateSettings({
+                                                            stackMaxVisible: value,
+                                                        })
                                                     }
                                                     label={String(value)}
                                                 />
@@ -149,7 +302,9 @@ export function SettingsPanel() {
                                     <Toggle
                                         value={settings.showCalendarHeatmap}
                                         onChange={(value) =>
-                                            updateSettings({ showCalendarHeatmap: value })
+                                            updateSettings({
+                                                showCalendarHeatmap: value,
+                                            })
                                         }
                                     />
                                 </Row>
@@ -181,6 +336,20 @@ export function SettingsPanel() {
                                 </Row>
 
                                 <Row
+                                    label="Collapsible Sidebar"
+                                    description="Allow the desktop sidebar to shrink to icon-only mode"
+                                >
+                                    <Toggle
+                                        value={settings.collapsibleSidebar}
+                                        onChange={(value) =>
+                                            updateSettings({
+                                                collapsibleSidebar: value,
+                                            })
+                                        }
+                                    />
+                                </Row>
+
+                                <Row
                                     label="Keyboard Help"
                                     description="Press ? or Cmd/Ctrl + / to open key bindings"
                                 >
@@ -207,13 +376,15 @@ export function SettingsPanel() {
                                             value={settings.autoScrollSpeed}
                                             onChange={(event) =>
                                                 setAutoScrollSpeed(
-                                                    Number.parseFloat(event.target.value),
+                                                    Number.parseFloat(
+                                                        event.target.value,
+                                                    ),
                                                 )
                                             }
                                             className="w-full accent-[hsl(var(--terminal-green))]"
                                             aria-label="Auto-scroll speed"
                                         />
-                                        <p className="text-[10px] text-muted-foreground font-mono text-right">
+                                        <p className="text-right font-mono text-[10px] text-muted-foreground">
                                             {settings.autoScrollSpeed === 0
                                                 ? "Off"
                                                 : settings.autoScrollSpeed.toFixed(1)}
@@ -223,9 +394,9 @@ export function SettingsPanel() {
                             </Section>
                         </div>
 
-                        <div className="px-5 py-3 border-t border-muted">
-                            <p className="text-[10px] text-muted-foreground/60 font-mono">
-                                Settings save automatically - Cmd/Ctrl + , to open
+                        <div className="border-t border-muted px-5 py-3">
+                            <p className="font-mono text-[10px] text-muted-foreground/60">
+                                Settings save automatically. Open with Cmd/Ctrl + ,
                             </p>
                         </div>
                     </motion.div>
@@ -238,7 +409,7 @@ export function SettingsPanel() {
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div>
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3 font-mono">
+            <p className="mb-3 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                 {label}
             </p>
             <div className="space-y-3">{children}</div>
@@ -260,7 +431,9 @@ function Row({
             <div className="min-w-0">
                 <p className="text-[12px] text-foreground">{label}</p>
                 {description && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{description}</p>
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        {description}
+                    </p>
                 )}
             </div>
             <div className="shrink-0">{children}</div>
@@ -272,12 +445,12 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
     return (
         <button
             onClick={() => onChange(!value)}
-            className={`relative w-9 h-5 border transition-colors ${
+            className={`relative h-5 w-9 border transition-colors ${
                 value ? "border-terminal bg-terminal/20" : "border-muted bg-surface-1"
             }`}
         >
             <span
-                className={`absolute top-0.5 w-3.5 h-3.5 transition-all ${
+                className={`absolute top-0.5 h-3.5 w-3.5 transition-all ${
                     value ? "left-4 bg-terminal" : "left-0.5 bg-muted-foreground"
                 }`}
             />
@@ -304,7 +477,7 @@ function PillBtn({
         <button
             onClick={onClick}
             title={title}
-            className={`flex items-center gap-1 px-2 py-1 text-[11px] border transition-colors ${
+            className={`flex items-center gap-1 border px-2 py-1 text-[11px] transition-colors ${
                 active
                     ? "border-terminal text-terminal"
                     : "border-muted text-muted-foreground hover:border-muted-foreground"
@@ -312,6 +485,40 @@ function PillBtn({
         >
             {icon}
             {label}
+        </button>
+    );
+}
+
+function SyncButton({
+    icon,
+    label,
+    description,
+    isLoading,
+    onClick,
+}: {
+    icon: React.ReactNode;
+    label: string;
+    description: string;
+    isLoading: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            disabled={isLoading}
+            className="w-full rounded-xl border border-muted bg-background/70 px-3 py-2 text-left transition-colors hover:border-muted-foreground disabled:cursor-not-allowed disabled:opacity-70"
+        >
+            <div className="flex items-center gap-3">
+                <span className="shrink-0 text-terminal">{icon}</span>
+                <span className="min-w-0">
+                    <span className="block text-[12px] text-foreground">
+                        {isLoading ? `${label}...` : label}
+                    </span>
+                    <span className="block text-[10px] text-muted-foreground">
+                        {isLoading ? "Please keep this tab open" : description}
+                    </span>
+                </span>
+            </div>
         </button>
     );
 }

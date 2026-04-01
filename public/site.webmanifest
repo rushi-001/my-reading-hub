@@ -1,0 +1,17 @@
+{
+    "name": "My Reading Hub",
+    "short_name": "Reading Hub",
+    "description": "A reading hub for lovers of books.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#000000",
+    "theme_color": "#000000",
+    "icons": [
+        {
+            "src": "/logo.png",
+            "sizes": "1219x1220",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ]
+}

@@ -19,6 +19,7 @@ export interface SettingsResponse {
 //     "stackMaxVisible": 3,
 //     "autoScrollSpeed": 0,
 //     "sidebarVisible": true,
+//     "collapsibleSidebar": true,
 //     "showCalendarHeatmap": true
 //   }
 // }
@@ -38,6 +39,7 @@ export async function fetchSettingsApi(): Promise<SettingsResponse> {
 //     "stackMaxVisible": 3,
 //     "autoScrollSpeed": 0,
 //     "sidebarVisible": true,
+//     "collapsibleSidebar": true,
 //     "showCalendarHeatmap": true
 //   }
 //
@@ -50,6 +52,7 @@ export async function fetchSettingsApi(): Promise<SettingsResponse> {
 //     "stackMaxVisible": 3,
 //     "autoScrollSpeed": 0,
 //     "sidebarVisible": true,
+//     "collapsibleSidebar": true,
 //     "showCalendarHeatmap": true
 //   }
 // }

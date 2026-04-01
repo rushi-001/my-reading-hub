@@ -15,3 +15,5 @@ export {
     updateNoteApi,
 } from "@/store/api/notesApi";
 export { fetchSettingsApi, updateSettingsApi } from "@/store/api/settingsApi";
+export { fetchAdminMeApi, loginAdminApi, logoutAdminApi } from "@/store/api/authApi";
+export { fetchSyncCommitsApi, pullLibraryApi, pushLibraryApi } from "@/store/api/syncApi";
