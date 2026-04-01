@@ -118,11 +118,6 @@ export default function LoginPage() {
                                     title="Safe Backups"
                                     description="Sync actions still ask for confirmation and show live processing state."
                                 />
-                                <FeatureCard
-                                    icon={<UserRound size={15} />}
-                                    title="Admin Access"
-                                    description="For now, only one admin login is available while backend auth is pending."
-                                />
                             </div>
                         </div>
                     </section>
