@@ -173,7 +173,7 @@ export function BookReaderView() {
     const getScrollTarget = () => {
         if (!scrollRef.current) return null;
         const pdfScroller = scrollRef.current.querySelector<HTMLElement>(
-            ".rpv-core__inner-pages, .rpv-core__inner-page-container--single",
+            ".pdf-reader-scroll-container, .rpv-core__inner-pages, .rpv-core__inner-page-container--single",
         );
         return pdfScroller ?? scrollRef.current;
     };
